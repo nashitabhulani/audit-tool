@@ -1,721 +1,1034 @@
 import pptxgen from 'pptxgenjs';
 
-// Visual Style Configuration
+// =============================================================================
+// ALKEM ASCEND THEME — Visual Style Configuration
+// =============================================================================
+
 const COLORS = {
-  bg: '0F172A',         // Slate 900
-  text: 'F8FAFC',       // Slate 50
-  mutedText: '94A3B8',  // Slate 400
-  primary: '8B5CF6',    // Violet 500
-  accent: '06B6D4',     // Cyan 500
-  cardBg: '1E293B',     // Slate 800
-  border: '334155',     // Slate 700
+  // Backgrounds
   white: 'FFFFFF',
-  
-  // Severity colors
-  high: 'EF4444',       // Red 500
-  medium: 'F59E0B',     // Amber 500
-  low: '10B981'         // Emerald 500
+  lightBg: 'F9FAFB',        // Gray 50 — card backgrounds
+  darkNavy: '1A1A2E',       // Dark navy — title/section divider slides
+  darkCard: '16213E',       // Slightly lighter navy for cards on dark slides
+
+  // Text
+  darkText: '2D2D2D',       // Primary text on light backgrounds
+  mutedText: '6B7280',      // Secondary/muted text
+  lightText: 'FFFFFF',      // Text on dark backgrounds
+  lightMuted: 'B0B8C8',     // Muted text on dark backgrounds
+
+  // Accent Colors
+  orange: 'F97316',         // Primary accent — Vibrant Orange
+  deepOrange: 'EA580C',     // Deeper orange for gradient stops
+  red: 'DC2626',            // Secondary accent / high severity
+  amber: 'F59E0B',          // Medium severity
+  emerald: '10B981',        // Low severity / success
+
+  // Borders
+  border: 'E5E7EB',         // Light grey border for cards
+  darkBorder: '2D3A5E',     // Border on dark backgrounds
 };
 
 const FONTS = {
-  title: 'Trebuchet MS', // Highly compatible modern font
-  body: 'Calibri'
+  heading: 'Calibri',
+  body: 'Calibri',
 };
 
-// Helper: Add background and brand watermark
-function applyBaseSlideLayout(slide, title, clientName, shapes) {
-  slide.background = { fill: COLORS.bg };
-  
-  // Slide Title
-  slide.addText(title, {
-    x: 0.5,
-    y: 0.3,
-    w: 6.5,
-    h: 0.5,
-    fontSize: 22,
-    bold: true,
-    color: COLORS.accent,
-    fontFace: FONTS.title
-  });
-  
-  // Client Tag (Top Right)
-  slide.addText(clientName.toUpperCase(), {
-    x: 7.0,
-    y: 0.3,
-    w: 2.5,
-    h: 0.5,
-    fontSize: 10,
-    bold: true,
-    color: COLORS.primary,
-    align: 'right',
-    fontFace: FONTS.title
-  });
+// =============================================================================
+// HELPERS
+// =============================================================================
 
-  // Top Accent Line
-  slide.addShape(shapes.RECTANGLE, {
-    x: 0.5,
-    y: 0.8,
-    w: 9.0,
-    h: 0.02,
-    fill: { color: COLORS.primary }
-  });
+/** Strip markdown bold/italic markers from text */
+function stripMarkdown(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/\*\*\*(.*?)\*\*\*/g, '$1')  // ***bold italic***
+    .replace(/\*\*(.*?)\*\*/g, '$1')        // **bold**
+    .replace(/\*(.*?)\*/g, '$1')            // *italic*
+    .replace(/__(.*?)__/g, '$1')            // __underline__
+    .replace(/_(.*?)_/g, '$1');             // _italic_
 }
 
-// Helper: Get severity color code
+/** Get severity color */
 function getSeverityColor(sev) {
   const s = String(sev).toLowerCase();
-  if (s === 'high') return COLORS.high;
-  if (s === 'medium') return COLORS.medium;
-  return COLORS.low;
+  if (s === 'high' || s === 'critical') return COLORS.red;
+  if (s === 'medium') return COLORS.amber;
+  return COLORS.emerald;
 }
+
+/** Get severity label color for light backgrounds */
+function getSeverityTextColor(sev) {
+  return getSeverityColor(sev);
+}
+
+/** Apply the standard light-background content slide layout */
+function applyLightSlideLayout(slide, title, clientName, shapes) {
+  slide.background = { fill: COLORS.white };
+
+  // Top orange accent bar (full width)
+  slide.addShape(shapes.RECTANGLE, {
+    x: 0.0, y: 0.0, w: 10.0, h: 0.06,
+    fill: { color: COLORS.orange }
+  });
+
+  // Slide title
+  slide.addText(title, {
+    x: 0.5, y: 0.2, w: 7.0, h: 0.5,
+    fontSize: 22, bold: true,
+    color: COLORS.darkText,
+    fontFace: FONTS.heading,
+    valign: 'middle',
+  });
+
+  // Client tag (top right)
+  slide.addText(clientName.toUpperCase(), {
+    x: 7.5, y: 0.2, w: 2.0, h: 0.5,
+    fontSize: 9, bold: true,
+    color: COLORS.orange,
+    align: 'right',
+    fontFace: FONTS.heading,
+    valign: 'middle',
+  });
+
+  // Subtle divider line under header
+  slide.addShape(shapes.RECTANGLE, {
+    x: 0.5, y: 0.72, w: 9.0, h: 0.015,
+    fill: { color: COLORS.border }
+  });
+}
+
+/** Apply dark slide layout (for title and end slides) */
+function applyDarkSlideLayout(slide, shapes) {
+  slide.background = { fill: COLORS.darkNavy };
+
+  // Decorative orange arc — right side
+  slide.addShape(shapes.RECTANGLE, {
+    x: 8.5, y: 0.0, w: 1.5, h: 5.625,
+    fill: { color: COLORS.orange },
+  });
+
+  // Secondary red strip
+  slide.addShape(shapes.RECTANGLE, {
+    x: 9.2, y: 0.0, w: 0.8, h: 5.625,
+    fill: { color: COLORS.deepOrange },
+  });
+}
+
+// =============================================================================
+// MAIN EXPORT
+// =============================================================================
 
 export function buildPPTX(type, data) {
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_16x9'; // 10.0 x 5.625 inches
-  const shapes = pptx.shapes || pptx.ShapeType; // Safe fallback
+  const shapes = pptx.shapes || pptx.ShapeType;
 
   const clientName = data.client_name || 'Client';
-  const generatedAt = data.generated_at ? new Date(data.generated_at).toLocaleDateString() : new Date().toLocaleDateString();
+  const generatedAt = data.generated_at
+    ? new Date(data.generated_at).toLocaleDateString()
+    : new Date().toLocaleDateString();
 
   if (type === 'audit') {
-    // -------------------------------------------------------------
-    // MODULE A: WEBSITE AUDIT DECK
-    // -------------------------------------------------------------
-
-    // 1. TITLE SLIDE
-    const titleSlide = pptx.addSlide();
-    titleSlide.background = { fill: COLORS.bg };
-
-    // Decorative graphic lines
-    titleSlide.addShape(shapes.RECTANGLE, { x: 0.0, y: 0.0, w: 0.15, h: 5.625, fill: { color: COLORS.primary } });
-    titleSlide.addShape(shapes.RECTANGLE, { x: 0.15, y: 0.0, w: 0.08, h: 5.625, fill: { color: COLORS.accent } });
-
-    titleSlide.addText('GOOGLE ANTIGRAVITY // AUDIT SUITE', {
-      x: 0.8, y: 1.5, w: 8.0, h: 0.4,
-      fontSize: 13, bold: true, color: COLORS.accent,
-      fontFace: FONTS.title
-    });
-
-    titleSlide.addText('Website Audit\nReport', {
-      x: 0.8, y: 1.9, w: 8.0, h: 1.6,
-      fontSize: 48, bold: true, color: COLORS.text,
-      fontFace: FONTS.title
-    });
-
-    // Info Card
-    titleSlide.addShape(shapes.RECTANGLE, {
-      x: 0.8, y: 3.8, w: 6.0, h: 1.2,
-      fill: { color: COLORS.cardBg },
-      line: { color: COLORS.border, width: 1 }
-    });
-
-    titleSlide.addText(`CLIENT: ${clientName}\nURL: ${data.url || 'Not specified'}\nDATE: ${generatedAt}`, {
-      x: 1.0, y: 3.9, w: 5.6, h: 1.0,
-      fontSize: 11, color: COLORS.mutedText,
-      fontFace: FONTS.body,
-      lineSpacing: 22
-    });
-
-    // 2. SUMMARY SLIDE (Overall Score & Quick Wins)
-    const summarySlide = pptx.addSlide();
-    applyBaseSlideLayout(summarySlide, 'Executive Audit Summary', clientName, shapes);
-
-    // Left Column: Overall Score Card
-    summarySlide.addShape(shapes.RECTANGLE, {
-      x: 0.5, y: 1.2, w: 3.5, h: 3.8,
-      fill: { color: COLORS.cardBg },
-      line: { color: COLORS.border, width: 1 }
-    });
-
-    summarySlide.addText('OVERALL PERFORMANCE SCORE', {
-      x: 0.8, y: 1.5, w: 2.9, h: 0.4,
-      fontSize: 11, bold: true, color: COLORS.mutedText,
-      align: 'center', fontFace: FONTS.title
-    });
-
-    const scoreColor = data.overall_score >= 8 ? COLORS.low : (data.overall_score >= 5 ? COLORS.medium : COLORS.high);
-    summarySlide.addText(String(data.overall_score || 'N/A'), {
-      x: 0.8, y: 1.9, w: 2.9, h: 1.5,
-      fontSize: 84, bold: true, color: scoreColor,
-      align: 'center', fontFace: FONTS.title
-    });
-
-    summarySlide.addText('OUT OF 10', {
-      x: 0.8, y: 3.4, w: 2.9, h: 0.3,
-      fontSize: 12, bold: true, color: COLORS.mutedText,
-      align: 'center', fontFace: FONTS.body
-    });
-
-    summarySlide.addText('A professional strategic audit evaluating UX, technical metrics, accessibility, and conversion elements.', {
-      x: 0.8, y: 3.8, w: 2.9, h: 1.0,
-      fontSize: 10, color: COLORS.mutedText,
-      align: 'center', fontFace: FONTS.body
-    });
-
-    // Right Column: Strategic Quick Wins
-    summarySlide.addText('STRATEGIC QUICK WINS', {
-      x: 4.4, y: 1.2, w: 5.1, h: 0.4,
-      fontSize: 14, bold: true, color: COLORS.accent,
-      fontFace: FONTS.title
-    });
-
-    const quickWins = data.action_plan?.quick_wins || [];
-    let quickWinsText = '';
-    if (quickWins.length > 0) {
-      quickWinsText = quickWins.map(w => `• ${w}`).join('\n\n');
-    } else {
-      quickWinsText = 'No quick wins specified.';
-    }
-
-    summarySlide.addText(quickWinsText, {
-      x: 4.4, y: 1.7, w: 5.1, h: 3.3,
-      fontSize: 11, color: COLORS.text,
-      fontFace: FONTS.body,
-      lineSpacing: 18
-    });
-
-    // 3. SECTIONS SLIDES
-    const sections = data.sections || [];
-    sections.forEach((sec) => {
-      const secSlide = pptx.addSlide();
-      applyBaseSlideLayout(secSlide, `${sec.section_name} Analysis`, clientName, shapes);
-
-      // Section Score Card (Left)
-      secSlide.addShape(shapes.RECTANGLE, {
-        x: 0.5, y: 1.2, w: 2.5, h: 3.8,
-        fill: { color: COLORS.cardBg },
-        line: { color: COLORS.border, width: 1 }
-      });
-
-      secSlide.addText('SECTION SCORE', {
-        x: 0.6, y: 1.5, w: 2.3, h: 0.3,
-        fontSize: 11, bold: true, color: COLORS.mutedText,
-        align: 'center', fontFace: FONTS.title
-      });
-
-      const sScore = sec.score || 0;
-      const sColor = sScore >= 8 ? COLORS.low : (sScore >= 5 ? COLORS.medium : COLORS.high);
-      
-      secSlide.addText(String(sScore), {
-        x: 0.6, y: 1.8, w: 2.3, h: 1.2,
-        fontSize: 64, bold: true, color: sColor,
-        align: 'center', fontFace: FONTS.title
-      });
-
-      secSlide.addText('/ 10', {
-        x: 0.6, y: 3.0, w: 2.3, h: 0.3,
-        fontSize: 12, bold: true, color: COLORS.mutedText,
-        align: 'center', fontFace: FONTS.body
-      });
-
-      secSlide.addText(`Strategic evaluation covering ${sec.section_name.toLowerCase()} metrics and industry standard patterns.`, {
-        x: 0.7, y: 3.4, w: 2.1, h: 1.4,
-        fontSize: 9, color: COLORS.mutedText,
-        align: 'center', fontFace: FONTS.body
-      });
-
-      // Findings List (Right)
-      secSlide.addText('KEY FINDINGS & RECOMMENDATIONS', {
-        x: 3.3, y: 1.2, w: 6.2, h: 0.4,
-        fontSize: 14, bold: true, color: COLORS.accent,
-        fontFace: FONTS.title
-      });
-
-      const findings = sec.findings || [];
-      if (findings.length === 0) {
-        secSlide.addText('No findings recorded for this section.', {
-          x: 3.3, y: 1.8, w: 6.2, h: 1.0,
-          fontSize: 11, color: COLORS.mutedText, fontFace: FONTS.body
-        });
-      } else {
-        // Draw up to 3 findings to avoid overflowing
-        findings.slice(0, 3).forEach((f, idx) => {
-          const yPos = 1.7 + (idx * 1.1);
-          
-          // Severity indicator bar
-          const sColorCode = getSeverityColor(f.severity);
-          secSlide.addShape(shapes.RECTANGLE, {
-            x: 3.3, y: yPos, w: 0.08, h: 0.9,
-            fill: { color: sColorCode }
-          });
-
-          // Text content
-          const findingTitle = `${f.issue.toUpperCase()} [Severity: ${f.severity.toUpperCase()} | Effort: ${f.effort_estimate.toUpperCase()}]`;
-          secSlide.addText(findingTitle, {
-            x: 3.5, y: yPos, w: 6.0, h: 0.25,
-            fontSize: 10, bold: true, color: COLORS.text,
-            fontFace: FONTS.title
-          });
-
-          const bodyContent = `Impact: ${f.impact}\nRecommendation: ${f.recommendation}`;
-          secSlide.addText(bodyContent, {
-            x: 3.5, y: yPos + 0.25, w: 6.0, h: 0.65,
-            fontSize: 9, color: COLORS.mutedText,
-            fontFace: FONTS.body,
-            lineSpacing: 14
-          });
-        });
-      }
-    });
-
-    // 4. ACTION PLAN DEEP DIVE SLIDE
-    const actionPlanSlide = pptx.addSlide();
-    applyBaseSlideLayout(actionPlanSlide, 'Strategic Action Roadmap', clientName, shapes);
-
-    const ap = data.action_plan || {};
-    const roadmap = [
-      { title: 'QUICK WINS (Short-Term)', items: ap.quick_wins || [], x: 0.5, color: COLORS.accent },
-      { title: 'MEDIUM-TERM ROUTINE', items: ap.medium_term || [], x: 3.6, color: COLORS.primary },
-      { title: 'LONG-TERM EVOLUTION', items: ap.long_term || [], x: 6.7, color: COLORS.mutedText }
-    ];
-
-    roadmap.forEach((col) => {
-      // Column Header Box
-      actionPlanSlide.addShape(shapes.RECTANGLE, {
-        x: col.x, y: 1.2, w: 2.8, h: 0.4,
-        fill: { color: COLORS.cardBg },
-        line: { color: COLORS.border, width: 1 }
-      });
-
-      actionPlanSlide.addText(col.title, {
-        x: col.x + 0.1, y: 1.25, w: 2.6, h: 0.3,
-        fontSize: 10, bold: true, color: col.color,
-        align: 'center', fontFace: FONTS.title
-      });
-
-      // Items text box
-      const content = col.items.map(it => `• ${it}`).join('\n\n');
-      actionPlanSlide.addText(content || 'No tasks defined.', {
-        x: col.x, y: 1.8, w: 2.8, h: 3.2,
-        fontSize: 9, color: COLORS.text,
-        fontFace: FONTS.body,
-        lineSpacing: 15
-      });
-    });
-
-    // 5. CONCLUSION / THANK YOU SLIDE
-    const endSlide = pptx.addSlide();
-    endSlide.background = { fill: COLORS.bg };
-
-    endSlide.addShape(shapes.RECTANGLE, { x: 0.0, y: 0.0, w: 10.0, h: 0.1, fill: { color: COLORS.primary } });
-
-    endSlide.addText('End of Report', {
-      x: 1.0, y: 2.0, w: 8.0, h: 0.5,
-      fontSize: 16, bold: true, color: COLORS.accent,
-      align: 'center', fontFace: FONTS.title
-    });
-
-    endSlide.addText('Thank You.', {
-      x: 1.0, y: 2.5, w: 8.0, h: 1.0,
-      fontSize: 48, bold: true, color: COLORS.text,
-      align: 'center', fontFace: FONTS.title
-    });
-
-    endSlide.addText('Google Antigravity // Building Client Success', {
-      x: 1.0, y: 3.8, w: 8.0, h: 0.4,
-      fontSize: 12, color: COLORS.mutedText,
-      align: 'center', fontFace: FONTS.body
-    });
-
+    buildAuditDeck(pptx, shapes, data, clientName, generatedAt);
   } else if (type === 'pre-scoping') {
-    // -------------------------------------------------------------
-    // MODULE B: DISCOVERY & PRE-SCOPING DECK
-    // -------------------------------------------------------------
-
-    // 1. TITLE SLIDE
-    const titleSlide = pptx.addSlide();
-    titleSlide.background = { fill: COLORS.bg };
-
-    titleSlide.addShape(shapes.RECTANGLE, { x: 0.0, y: 0.0, w: 0.15, h: 5.625, fill: { color: COLORS.primary } });
-    titleSlide.addShape(shapes.RECTANGLE, { x: 0.15, y: 0.0, w: 0.08, h: 5.625, fill: { color: COLORS.accent } });
-
-    titleSlide.addText('GOOGLE ANTIGRAVITY // DIGITAL DISCOVERY', {
-      x: 0.8, y: 1.5, w: 8.0, h: 0.4,
-      fontSize: 13, bold: true, color: COLORS.accent,
-      fontFace: FONTS.title
-    });
-
-    titleSlide.addText('Discovery &\nPre-Scoping', {
-      x: 0.8, y: 1.9, w: 8.0, h: 1.6,
-      fontSize: 48, bold: true, color: COLORS.text,
-      fontFace: FONTS.title
-    });
-
-    titleSlide.addShape(shapes.RECTANGLE, {
-      x: 0.8, y: 3.8, w: 6.0, h: 1.2,
-      fill: { color: COLORS.cardBg },
-      line: { color: COLORS.border, width: 1 }
-    });
-
-    titleSlide.addText(`CLIENT: ${clientName}\nDATE: ${generatedAt}\nPREPARED BY: Digital Strategy Team`, {
-      x: 1.0, y: 3.9, w: 5.6, h: 1.0,
-      fontSize: 11, color: COLORS.mutedText,
-      fontFace: FONTS.body,
-      lineSpacing: 22
-    });
-
-    // 2. COMPETITOR ANALYSIS
-    const compSlide = pptx.addSlide();
-    applyBaseSlideLayout(compSlide, 'Competitor Benchmarking', clientName, shapes);
-
-    const competitors = data.competitor_analysis || [];
-    if (competitors.length === 0) {
-      compSlide.addText('No competitor analysis provided.', {
-        x: 0.5, y: 1.5, w: 9.0, h: 1.0,
-        fontSize: 12, color: COLORS.mutedText, fontFace: FONTS.body
-      });
-    } else {
-      // Create horizontal block grid (up to 3 competitors)
-      const maxComp = Math.min(competitors.length, 3);
-      const colW = (9.0 - (0.3 * (maxComp - 1))) / maxComp;
-
-      competitors.slice(0, 3).forEach((comp, idx) => {
-        const xPos = 0.5 + (idx * (colW + 0.3));
-
-        compSlide.addShape(shapes.RECTANGLE, {
-          x: xPos, y: 1.2, w: colW, h: 3.8,
-          fill: { color: COLORS.cardBg },
-          line: { color: COLORS.border, width: 1 }
-        });
-
-        compSlide.addText(comp.competitor_name.toUpperCase(), {
-          x: xPos + 0.15, y: 1.4, w: colW - 0.3, h: 0.3,
-          fontSize: 12, bold: true, color: COLORS.accent,
-          fontFace: FONTS.title
-        });
-
-        compSlide.addText(comp.url || '', {
-          x: xPos + 0.15, y: 1.7, w: colW - 0.3, h: 0.2,
-          fontSize: 9, color: COLORS.primary,
-          fontFace: FONTS.body
-        });
-
-        const findingsBulleted = (comp.key_findings || []).map(f => `• ${f}`).join('\n');
-        const textBlock = `Observation:\n${comp.observation}\n\nKey Findings:\n${findingsBulleted}\n\nTakeaway:\n${comp.key_takeaway}`;
-        compSlide.addText(textBlock, {
-          x: xPos + 0.15, y: 2.0, w: colW - 0.3, h: 2.8,
-          fontSize: 8.5, color: COLORS.text,
-          fontFace: FONTS.body,
-          lineSpacing: 13
-        });
-      });
-    }
-
-    // 3. ACTIONABLE REQUIREMENTS
-    const reqSlide = pptx.addSlide();
-    applyBaseSlideLayout(reqSlide, 'Actionable Requirements Map', clientName, shapes);
-
-    const actReqs = data.actionable_requirements || [];
-    if (actReqs.length === 0) {
-      reqSlide.addText('No actionable requirements recorded.', {
-        x: 0.5, y: 1.5, w: 9.0, h: 1.0,
-        fontSize: 12, color: COLORS.mutedText, fontFace: FONTS.body
-      });
-    } else {
-      // Build native PPTX table
-      const tableData = [
-        [
-          { text: 'CATEGORY', options: { fill: COLORS.primary, color: COLORS.white, bold: true, fontFace: FONTS.title, fontSize: 10 } },
-          { text: 'FINDING', options: { fill: COLORS.primary, color: COLORS.white, bold: true, fontFace: FONTS.title, fontSize: 10 } },
-          { text: 'REQUIREMENT SPECIFICATION', options: { fill: COLORS.primary, color: COLORS.white, bold: true, fontFace: FONTS.title, fontSize: 10 } }
-        ]
-      ];
-
-      actReqs.slice(0, 6).forEach((req) => {
-        tableData.push([
-          { text: req.category || 'General', options: { color: COLORS.accent, fontFace: FONTS.title, fontSize: 9 } },
-          { text: req.finding || '', options: { color: COLORS.text, fontFace: FONTS.body, fontSize: 8.5 } },
-          { text: req.requirement || '', options: { color: COLORS.mutedText, fontFace: FONTS.body, fontSize: 8.5 } }
-        ]);
-      });
-
-      reqSlide.addTable(tableData, {
-        x: 0.5, y: 1.2, w: 9.0, h: 3.8,
-        colW: [2.0, 3.5, 3.5],
-        border: { type: 'solid', color: COLORS.border, pt: 1 },
-        fill: { color: COLORS.cardBg }
-      });
-    }
-
-    // 4. INFORMATION ARCHITECTURE
-    const iaSlide = pptx.addSlide();
-    applyBaseSlideLayout(iaSlide, 'Information Architecture & Sitemap', clientName, shapes);
-
-    const ia = data.information_architecture || {};
-    
-    // Core Sitemap Box
-    iaSlide.addShape(shapes.RECTANGLE, {
-      x: 0.5, y: 1.2, w: 4.2, h: 3.8,
-      fill: { color: COLORS.cardBg },
-      line: { color: COLORS.border, width: 1 }
-    });
-
-    iaSlide.addText('PRIMARY NAVIGATION SITEMAP', {
-      x: 0.7, y: 1.4, w: 3.8, h: 0.3,
-      fontSize: 12, bold: true, color: COLORS.accent,
-      fontFace: FONTS.title
-    });
-
-    const primaryPagesText = (ia.primary_pages || []).map(p => `• ${p}`).join('\n\n');
-    iaSlide.addText(primaryPagesText || 'None defined.', {
-      x: 0.7, y: 1.8, w: 3.8, h: 3.0,
-      fontSize: 10, color: COLORS.text,
-      fontFace: FONTS.body,
-      lineSpacing: 14
-    });
-
-    // Secondary Structure Columns (Right Stacked)
-    // Templates Box
-    iaSlide.addShape(shapes.RECTANGLE, {
-      x: 5.0, y: 1.2, w: 4.5, h: 1.8,
-      fill: { color: COLORS.cardBg },
-      line: { color: COLORS.border, width: 1 }
-    });
-
-    iaSlide.addText('TEMPLATE-BASED PAGE STRUCTURES', {
-      x: 5.2, y: 1.3, w: 4.1, h: 0.3,
-      fontSize: 11, bold: true, color: COLORS.primary,
-      fontFace: FONTS.title
-    });
-
-    const tempText = (ia.template_based_pages || []).map(t => `${t.template_type} (${t.usage})`).join(' | ');
-    iaSlide.addText(tempText || 'None defined.', {
-      x: 5.2, y: 1.6, w: 4.1, h: 1.2,
-      fontSize: 9, color: COLORS.text,
-      fontFace: FONTS.body,
-      lineSpacing: 14
-    });
-
-    // Dynamic Pages Box
-    iaSlide.addShape(shapes.RECTANGLE, {
-      x: 5.0, y: 3.2, w: 4.5, h: 1.8,
-      fill: { color: COLORS.cardBg },
-      line: { color: COLORS.border, width: 1 }
-    });
-
-    iaSlide.addText('DYNAMIC ARCHIVES & PAGES', {
-      x: 5.2, y: 3.3, w: 4.1, h: 0.3,
-      fontSize: 11, bold: true, color: COLORS.accent,
-      fontFace: FONTS.title
-    });
-
-    const dynamicPagesText = (ia.dynamic_pages || []).map(p => `• ${p}`).join('\n');
-    iaSlide.addText(dynamicPagesText || 'None defined.', {
-      x: 5.2, y: 3.6, w: 4.1, h: 1.2,
-      fontSize: 9, color: COLORS.mutedText,
-      fontFace: FONTS.body,
-      lineSpacing: 12
-    });
-
-    // 5. FEATURE REQUIREMENTS
-    const featSlide = pptx.addSlide();
-    applyBaseSlideLayout(featSlide, 'Scoped Feature Specifications', clientName, shapes);
-
-    const featReqs = data.feature_requirements || [];
-    if (featReqs.length === 0) {
-      featSlide.addText('No specific feature requirements.', {
-        x: 0.5, y: 1.5, w: 9.0, h: 1.0,
-        fontSize: 12, color: COLORS.mutedText, fontFace: FONTS.body
-      });
-    } else {
-      const tableData = [
-        [
-          { text: 'PAGE TYPE', options: { fill: COLORS.primary, color: COLORS.white, bold: true, fontFace: FONTS.title, fontSize: 10 } },
-          { text: 'FEATURE SPEC', options: { fill: COLORS.primary, color: COLORS.white, bold: true, fontFace: FONTS.title, fontSize: 10 } },
-          { text: 'BEHAVIOR DESCRIPTION', options: { fill: COLORS.primary, color: COLORS.white, bold: true, fontFace: FONTS.title, fontSize: 10 } },
-          { text: 'MANDATORY (MVP)', options: { fill: COLORS.primary, color: COLORS.white, bold: true, fontFace: FONTS.title, fontSize: 10 } }
-        ]
-      ];
-
-      // Flatten nested features
-      const flatFeats = [];
-      featReqs.forEach((fr) => {
-        const pageType = fr.page_type || 'General';
-        (fr.features || []).forEach((feat) => {
-          flatFeats.push({ pageType, ...feat });
-        });
-      });
-
-      flatFeats.slice(0, 6).forEach((item) => {
-        tableData.push([
-          { text: item.pageType, options: { color: COLORS.accent, fontFace: FONTS.title, fontSize: 8.5 } },
-          { text: item.feature, options: { color: COLORS.text, fontFace: FONTS.body, fontSize: 8.5, bold: true } },
-          { text: item.description, options: { color: COLORS.mutedText, fontFace: FONTS.body, fontSize: 8 } },
-          { text: item.mandatory ? 'YES' : 'NO (V2)', options: { color: item.mandatory ? COLORS.low : COLORS.medium, fontFace: FONTS.title, fontSize: 8.5, bold: true } }
-        ]);
-      });
-
-      featSlide.addTable(tableData, {
-        x: 0.5, y: 1.2, w: 9.0, h: 3.8,
-        colW: [1.8, 2.2, 3.8, 1.2],
-        border: { type: 'solid', color: COLORS.border, pt: 1 },
-        fill: { color: COLORS.cardBg }
-      });
-    }
-
-    // 6. FORMS AND USER JOURNEYS
-    const formSlide = pptx.addSlide();
-    applyBaseSlideLayout(formSlide, 'Forms & User Navigation Journeys', clientName, shapes);
-
-    const fj = data.forms_and_journeys || {};
-    
-    // Left Box: Forms Scoped
-    formSlide.addShape(shapes.RECTANGLE, {
-      x: 0.5, y: 1.2, w: 4.2, h: 3.8,
-      fill: { color: COLORS.cardBg },
-      line: { color: COLORS.border, width: 1 }
-    });
-
-    formSlide.addText('SCOPED LEAD & CONVERSION FORMS', {
-      x: 0.7, y: 1.4, w: 3.8, h: 0.3,
-      fontSize: 12, bold: true, color: COLORS.accent,
-      fontFace: FONTS.title
-    });
-
-    const formsList = fj.forms || [];
-    if (formsList.length === 0) {
-      formSlide.addText('No forms defined.', { x: 0.7, y: 1.8, w: 3.8, h: 1.0, fontSize: 10, color: COLORS.mutedText, fontFace: FONTS.body });
-    } else {
-      let formText = '';
-      formsList.slice(0, 3).forEach((frm) => {
-        formText += `**${frm.form_name}** (Page: ${frm.trigger_page})\n`;
-        formText += `Fields: ${(frm.fields || []).join(', ')}\n`;
-        formText += `After submit: ${frm.post_submission_action}\n\n`;
-      });
-      formSlide.addText(formText, {
-        x: 0.7, y: 1.8, w: 3.8, h: 3.0,
-        fontSize: 8.5, color: COLORS.text,
-        fontFace: FONTS.body,
-        lineSpacing: 13
-      });
-    }
-
-    // Right Box: User Journeys
-    formSlide.addShape(shapes.RECTANGLE, {
-      x: 5.0, y: 1.2, w: 4.5, h: 3.8,
-      fill: { color: COLORS.cardBg },
-      line: { color: COLORS.border, width: 1 }
-    });
-
-    formSlide.addText('CRITICAL CLIENT CONVERSION JOURNEYS', {
-      x: 5.2, y: 1.4, w: 4.1, h: 0.3,
-      fontSize: 12, bold: true, color: COLORS.primary,
-      fontFace: FONTS.title
-    });
-
-    const journeys = fj.user_journeys || [];
-    if (journeys.length === 0) {
-      formSlide.addText('No user journeys defined.', { x: 5.2, y: 1.8, w: 4.1, h: 1.0, fontSize: 10, color: COLORS.mutedText, fontFace: FONTS.body });
-    } else {
-      let journeyText = '';
-      journeys.slice(0, 3).forEach((j) => {
-        journeyText += `Persona: ${j.user_type} (Entry: ${j.entry_point})\n`;
-        journeyText += `Path: ${j.action}\n`;
-        journeyText += `Goal: ${j.outcome}\n\n`;
-      });
-      formSlide.addText(journeyText, {
-        x: 5.2, y: 1.8, w: 4.1, h: 3.0,
-        fontSize: 8.5, color: COLORS.text,
-        fontFace: FONTS.body,
-        lineSpacing: 13
-      });
-    }
-
-    // 7. TECHNICAL REQUIREMENTS
-    const techSlide = pptx.addSlide();
-    applyBaseSlideLayout(techSlide, 'Technical Architecture & Specifications', clientName, shapes);
-
-    const tech = data.technical_requirements || {};
-    const techSpecs = [
-      { label: 'PLATFORM / CMS', val: tech.platform_cms || 'Not decided', y: 1.2 },
-      { label: 'THEME / CUSTOM DEVELOPMENT', val: tech.theme_structure || 'Not decided', y: 1.9 },
-      { label: 'HOSTING & INFRASTRUCTURE', val: tech.hosting || 'Not decided', y: 2.6 },
-      { label: 'PERFORMANCE OPTIMIZATION', val: tech.performance || 'Not decided', y: 3.3 },
-      { label: 'SECURITY & HARDENING', val: tech.security || 'Not decided', y: 4.0 }
-    ];
-
-    techSpecs.forEach((spec) => {
-      // Small card for each spec
-      techSlide.addShape(shapes.RECTANGLE, {
-        x: 0.5, y: spec.y, w: 9.0, h: 0.6,
-        fill: { color: COLORS.cardBg },
-        line: { color: COLORS.border, width: 1 }
-      });
-
-      techSlide.addText(spec.label, {
-        x: 0.7, y: spec.y + 0.15, w: 2.2, h: 0.3,
-        fontSize: 10, bold: true, color: COLORS.accent,
-        fontFace: FONTS.title
-      });
-
-      techSlide.addText(spec.val, {
-        x: 3.0, y: spec.y + 0.1, w: 6.3, h: 0.4,
-        fontSize: 9, color: COLORS.text,
-        fontFace: FONTS.body
-      });
-    });
-
-    // 8. CONTENT OWNERSHIP
-    const ownSlide = pptx.addSlide();
-    applyBaseSlideLayout(ownSlide, 'Content Resource & Ownership Matrix', clientName, shapes);
-
-    const ownership = data.content_ownership || [];
-    if (ownership.length === 0) {
-      ownSlide.addText('No content ownership records.', {
-        x: 0.5, y: 1.5, w: 9.0, h: 1.0,
-        fontSize: 12, color: COLORS.mutedText, fontFace: FONTS.body
-      });
-    } else {
-      const tableData = [
-        [
-          { text: 'CONTENT NODE / SECTION', options: { fill: COLORS.primary, color: COLORS.white, bold: true, fontFace: FONTS.title, fontSize: 10 } },
-          { text: 'CONTENT SPECIFICATION', options: { fill: COLORS.primary, color: COLORS.white, bold: true, fontFace: FONTS.title, fontSize: 10 } },
-          { text: 'SOURCE STATUS', options: { fill: COLORS.primary, color: COLORS.white, bold: true, fontFace: FONTS.title, fontSize: 10 } },
-          { text: 'PRIMARY RESPONSIBILITY', options: { fill: COLORS.primary, color: COLORS.white, bold: true, fontFace: FONTS.title, fontSize: 10 } }
-        ]
-      ];
-
-      ownership.slice(0, 6).forEach((own) => {
-        tableData.push([
-          { text: own.section || 'General', options: { color: COLORS.accent, fontFace: FONTS.title, fontSize: 8.5 } },
-          { text: own.content_required || '', options: { color: COLORS.text, fontFace: FONTS.body, fontSize: 8 } },
-          { text: own.source || 'New', options: { color: COLORS.text, fontFace: FONTS.body, fontSize: 8.5 } },
-          { text: own.responsibility || 'Client', options: { color: COLORS.primary, fontFace: FONTS.title, fontSize: 8.5, bold: true } }
-        ]);
-      });
-
-      ownSlide.addTable(tableData, {
-        x: 0.5, y: 1.2, w: 9.0, h: 3.8,
-        colW: [2.0, 3.5, 1.8, 1.7],
-        border: { type: 'solid', color: COLORS.border, pt: 1 },
-        fill: { color: COLORS.cardBg }
-      });
-    }
-
-    // 9. CONCLUSION
-    const endSlide = pptx.addSlide();
-    endSlide.background = { fill: COLORS.bg };
-
-    endSlide.addShape(shapes.RECTANGLE, { x: 0.0, y: 0.0, w: 10.0, h: 0.1, fill: { color: COLORS.primary } });
-
-    endSlide.addText('End of Pre-Scoping Deck', {
-      x: 1.0, y: 2.0, w: 8.0, h: 0.5,
-      fontSize: 16, bold: true, color: COLORS.accent,
-      align: 'center', fontFace: FONTS.title
-    });
-
-    endSlide.addText('Ready for Review.', {
-      x: 1.0, y: 2.5, w: 8.0, h: 1.0,
-      fontSize: 48, bold: true, color: COLORS.text,
-      align: 'center', fontFace: FONTS.title
-    });
-
-    endSlide.addText('Google Antigravity // Building Client Success', {
-      x: 1.0, y: 3.8, w: 8.0, h: 0.4,
-      fontSize: 12, color: COLORS.mutedText,
-      align: 'center', fontFace: FONTS.body
-    });
+    buildPreScopingDeck(pptx, shapes, data, clientName, generatedAt);
   }
 
   return pptx;
+}
+
+// =============================================================================
+// MODULE A: WEBSITE AUDIT DECK
+// =============================================================================
+
+function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
+
+  // ─── 1. TITLE SLIDE ───────────────────────────────────────────────────────
+  const titleSlide = pptx.addSlide();
+  applyDarkSlideLayout(titleSlide, shapes);
+
+  // Left decorative strips
+  titleSlide.addShape(shapes.RECTANGLE, {
+    x: 0.0, y: 0.0, w: 0.12, h: 5.625,
+    fill: { color: COLORS.orange }
+  });
+  titleSlide.addShape(shapes.RECTANGLE, {
+    x: 0.12, y: 0.0, w: 0.06, h: 5.625,
+    fill: { color: COLORS.deepOrange }
+  });
+
+  // Tagline
+  titleSlide.addText('INTEGRITY MATTERS // AUDIT SUITE', {
+    x: 0.7, y: 1.2, w: 7.0, h: 0.4,
+    fontSize: 12, bold: true,
+    color: COLORS.orange,
+    fontFace: FONTS.heading,
+    letterSpacing: 3,
+  });
+
+  // Main title
+  titleSlide.addText('Website Audit\nReport', {
+    x: 0.7, y: 1.7, w: 7.0, h: 1.8,
+    fontSize: 48, bold: true,
+    color: COLORS.lightText,
+    fontFace: FONTS.heading,
+    lineSpacingMultiple: 1.1,
+  });
+
+  // Info card
+  titleSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+    x: 0.7, y: 3.8, w: 5.5, h: 1.2,
+    fill: { color: COLORS.darkCard },
+    rectRadius: 0.1,
+  });
+
+  titleSlide.addText(
+    [
+      { text: 'CLIENT:  ', options: { fontSize: 10, color: COLORS.orange, bold: true, fontFace: FONTS.heading } },
+      { text: clientName + '\n', options: { fontSize: 10, color: COLORS.lightText, fontFace: FONTS.body } },
+      { text: 'URL:  ', options: { fontSize: 10, color: COLORS.orange, bold: true, fontFace: FONTS.heading } },
+      { text: (data.url || 'Not specified') + '\n', options: { fontSize: 10, color: COLORS.lightMuted, fontFace: FONTS.body } },
+      { text: 'DATE:  ', options: { fontSize: 10, color: COLORS.orange, bold: true, fontFace: FONTS.heading } },
+      { text: generatedAt, options: { fontSize: 10, color: COLORS.lightMuted, fontFace: FONTS.body } },
+    ],
+    {
+      x: 0.95, y: 3.9, w: 5.0, h: 1.0,
+      lineSpacingMultiple: 1.5,
+      valign: 'middle',
+    }
+  );
+
+  // ─── 2. EXECUTIVE SUMMARY SLIDE ──────────────────────────────────────────
+  const summarySlide = pptx.addSlide();
+  applyLightSlideLayout(summarySlide, 'Executive Audit Summary', clientName, shapes);
+
+  // Left: Overall Score Card
+  summarySlide.addShape(shapes.ROUNDED_RECTANGLE, {
+    x: 0.5, y: 1.0, w: 3.2, h: 3.8,
+    fill: { color: COLORS.lightBg },
+    line: { color: COLORS.border, width: 1 },
+    rectRadius: 0.1,
+  });
+
+  summarySlide.addText('OVERALL SCORE', {
+    x: 0.7, y: 1.2, w: 2.8, h: 0.35,
+    fontSize: 11, bold: true,
+    color: COLORS.mutedText,
+    align: 'center',
+    fontFace: FONTS.heading,
+  });
+
+  const overallScore = data.overall_score || 0;
+  const scoreColor = overallScore >= 8 ? COLORS.emerald : (overallScore >= 5 ? COLORS.amber : COLORS.red);
+
+  summarySlide.addText(String(overallScore), {
+    x: 0.7, y: 1.5, w: 2.8, h: 1.6,
+    fontSize: 80, bold: true,
+    color: scoreColor,
+    align: 'center',
+    fontFace: FONTS.heading,
+    valign: 'middle',
+  });
+
+  summarySlide.addText('OUT OF 10', {
+    x: 0.7, y: 3.1, w: 2.8, h: 0.3,
+    fontSize: 11, bold: true,
+    color: COLORS.mutedText,
+    align: 'center',
+    fontFace: FONTS.body,
+  });
+
+  summarySlide.addText('A strategic evaluation covering UX, technical metrics, accessibility, and conversion elements.', {
+    x: 0.8, y: 3.5, w: 2.6, h: 1.0,
+    fontSize: 9, color: COLORS.mutedText,
+    align: 'center',
+    fontFace: FONTS.body,
+    lineSpacingMultiple: 1.3,
+  });
+
+  // Right: Quick Wins
+  summarySlide.addText('STRATEGIC QUICK WINS', {
+    x: 4.1, y: 1.0, w: 5.4, h: 0.4,
+    fontSize: 14, bold: true,
+    color: COLORS.orange,
+    fontFace: FONTS.heading,
+  });
+
+  const quickWins = data.action_plan?.quick_wins || [];
+  if (quickWins.length > 0) {
+    const qwTextRuns = [];
+    quickWins.forEach((w, i) => {
+      qwTextRuns.push({
+        text: '●  ', options: { fontSize: 10, color: COLORS.orange, fontFace: FONTS.body }
+      });
+      qwTextRuns.push({
+        text: stripMarkdown(w) + (i < quickWins.length - 1 ? '\n\n' : ''),
+        options: { fontSize: 10, color: COLORS.darkText, fontFace: FONTS.body }
+      });
+    });
+
+    summarySlide.addText(qwTextRuns, {
+      x: 4.1, y: 1.5, w: 5.4, h: 3.3,
+      valign: 'top',
+      lineSpacingMultiple: 1.2,
+      shrinkText: true,
+    });
+  } else {
+    summarySlide.addText('No quick wins specified.', {
+      x: 4.1, y: 1.5, w: 5.4, h: 1.0,
+      fontSize: 11, color: COLORS.mutedText, fontFace: FONTS.body
+    });
+  }
+
+  // ─── 3. SECTION SLIDES ──────────────────────────────────────────────────
+  const sections = data.sections || [];
+  sections.forEach((sec) => {
+    const findings = sec.findings || [];
+    const MAX_FINDINGS_PER_SLIDE = 3;
+    const totalSlides = Math.max(1, Math.ceil(findings.length / MAX_FINDINGS_PER_SLIDE));
+
+    for (let slideIdx = 0; slideIdx < totalSlides; slideIdx++) {
+      const secSlide = pptx.addSlide();
+      const slideLabel = totalSlides > 1 ? ` (${slideIdx + 1}/${totalSlides})` : '';
+      applyLightSlideLayout(secSlide, `${sec.section_name} Analysis${slideLabel}`, clientName, shapes);
+
+      // Left: Section Score Card
+      secSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+        x: 0.5, y: 1.0, w: 2.5, h: 3.8,
+        fill: { color: COLORS.lightBg },
+        line: { color: COLORS.border, width: 1 },
+        rectRadius: 0.1,
+      });
+
+      secSlide.addText('SECTION SCORE', {
+        x: 0.6, y: 1.2, w: 2.3, h: 0.3,
+        fontSize: 10, bold: true,
+        color: COLORS.mutedText,
+        align: 'center',
+        fontFace: FONTS.heading,
+      });
+
+      const sScore = sec.score || 0;
+      const sColor = sScore >= 8 ? COLORS.emerald : (sScore >= 5 ? COLORS.amber : COLORS.red);
+
+      secSlide.addText(String(sScore), {
+        x: 0.6, y: 1.5, w: 2.3, h: 1.2,
+        fontSize: 60, bold: true,
+        color: sColor,
+        align: 'center',
+        fontFace: FONTS.heading,
+        valign: 'middle',
+      });
+
+      secSlide.addText('/ 10', {
+        x: 0.6, y: 2.7, w: 2.3, h: 0.3,
+        fontSize: 12, bold: true,
+        color: COLORS.mutedText,
+        align: 'center',
+        fontFace: FONTS.body,
+      });
+
+      secSlide.addText(`Strategic evaluation covering\n${sec.section_name.toLowerCase()} metrics\nand industry standard patterns.`, {
+        x: 0.7, y: 3.2, w: 2.1, h: 1.3,
+        fontSize: 9, color: COLORS.mutedText,
+        align: 'center',
+        fontFace: FONTS.body,
+        lineSpacingMultiple: 1.3,
+      });
+
+      // Right: Findings
+      secSlide.addText('KEY FINDINGS & RECOMMENDATIONS', {
+        x: 3.3, y: 1.0, w: 6.2, h: 0.35,
+        fontSize: 13, bold: true,
+        color: COLORS.orange,
+        fontFace: FONTS.heading,
+      });
+
+      const sliceStart = slideIdx * MAX_FINDINGS_PER_SLIDE;
+      const sliceEnd = sliceStart + MAX_FINDINGS_PER_SLIDE;
+      const visibleFindings = findings.slice(sliceStart, sliceEnd);
+
+      if (visibleFindings.length === 0) {
+        secSlide.addText('No findings recorded for this section.', {
+          x: 3.3, y: 1.5, w: 6.2, h: 1.0,
+          fontSize: 11, color: COLORS.mutedText, fontFace: FONTS.body,
+        });
+      } else {
+        const findingHeight = Math.min(1.3, 3.5 / visibleFindings.length);
+
+        visibleFindings.forEach((f, idx) => {
+          const yPos = 1.5 + (idx * findingHeight);
+
+          // Severity indicator bar (left edge)
+          const sevColor = getSeverityColor(f.severity);
+          secSlide.addShape(shapes.RECTANGLE, {
+            x: 3.3, y: yPos, w: 0.06, h: findingHeight - 0.1,
+            fill: { color: sevColor },
+          });
+
+          // Finding title (clean, no brackets)
+          const cleanIssue = stripMarkdown(f.issue || '');
+          secSlide.addText(cleanIssue, {
+            x: 3.55, y: yPos, w: 4.8, h: 0.3,
+            fontSize: 10, bold: true,
+            color: COLORS.darkText,
+            fontFace: FONTS.heading,
+            valign: 'top',
+          });
+
+          // Severity & Effort badges
+          const sevText = String(f.severity || 'N/A').toUpperCase();
+          const effText = String(f.effort_estimate || 'N/A').toUpperCase();
+
+          secSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+            x: 8.5, y: yPos + 0.02, w: 0.7, h: 0.22,
+            fill: { color: sevColor },
+            rectRadius: 0.05,
+          });
+          secSlide.addText(sevText, {
+            x: 8.5, y: yPos + 0.02, w: 0.7, h: 0.22,
+            fontSize: 7, bold: true,
+            color: COLORS.lightText,
+            align: 'center',
+            fontFace: FONTS.heading,
+            valign: 'middle',
+          });
+
+          secSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+            x: 9.25, y: yPos + 0.02, w: 0.55, h: 0.22,
+            fill: { color: COLORS.mutedText },
+            rectRadius: 0.05,
+          });
+          secSlide.addText(effText, {
+            x: 9.25, y: yPos + 0.02, w: 0.55, h: 0.22,
+            fontSize: 7, bold: true,
+            color: COLORS.lightText,
+            align: 'center',
+            fontFace: FONTS.heading,
+            valign: 'middle',
+          });
+
+          // Impact + Recommendation body
+          const impactText = stripMarkdown(f.impact || '');
+          const recText = stripMarkdown(f.recommendation || '');
+          const bodyRuns = [
+            { text: 'Impact: ', options: { fontSize: 8.5, bold: true, color: COLORS.mutedText, fontFace: FONTS.heading } },
+            { text: impactText + '\n', options: { fontSize: 8.5, color: COLORS.mutedText, fontFace: FONTS.body } },
+            { text: 'Recommendation: ', options: { fontSize: 8.5, bold: true, color: COLORS.orange, fontFace: FONTS.heading } },
+            { text: recText, options: { fontSize: 8.5, color: COLORS.darkText, fontFace: FONTS.body } },
+          ];
+
+          secSlide.addText(bodyRuns, {
+            x: 3.55, y: yPos + 0.3, w: 6.25, h: findingHeight - 0.45,
+            valign: 'top',
+            lineSpacingMultiple: 1.15,
+            shrinkText: true,
+          });
+        });
+      }
+    }
+  });
+
+  // ─── 4. ACTION PLAN ROADMAP SLIDE ──────────────────────────────────────
+  const actionPlanSlide = pptx.addSlide();
+  applyLightSlideLayout(actionPlanSlide, 'Strategic Action Roadmap', clientName, shapes);
+
+  const ap = data.action_plan || {};
+  const roadmap = [
+    { title: 'QUICK WINS', subtitle: 'Short-Term', items: ap.quick_wins || [], x: 0.5, accentColor: COLORS.orange },
+    { title: 'MEDIUM-TERM', subtitle: 'Routine', items: ap.medium_term || [], x: 3.6, accentColor: COLORS.deepOrange },
+    { title: 'LONG-TERM', subtitle: 'Evolution', items: ap.long_term || [], x: 6.7, accentColor: COLORS.red },
+  ];
+
+  roadmap.forEach((col) => {
+    // Column header
+    actionPlanSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+      x: col.x, y: 1.0, w: 2.8, h: 0.5,
+      fill: { color: col.accentColor },
+      rectRadius: 0.08,
+    });
+
+    actionPlanSlide.addText(`${col.title}\n${col.subtitle}`, {
+      x: col.x, y: 1.0, w: 2.8, h: 0.5,
+      fontSize: 10, bold: true,
+      color: COLORS.lightText,
+      align: 'center',
+      fontFace: FONTS.heading,
+      valign: 'middle',
+      lineSpacingMultiple: 1.0,
+    });
+
+    // Items card
+    actionPlanSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+      x: col.x, y: 1.6, w: 2.8, h: 3.4,
+      fill: { color: COLORS.lightBg },
+      line: { color: COLORS.border, width: 1 },
+      rectRadius: 0.08,
+    });
+
+    if (col.items.length > 0) {
+      const itemRuns = [];
+      col.items.forEach((it, i) => {
+        itemRuns.push({ text: '●  ', options: { fontSize: 9, color: col.accentColor, fontFace: FONTS.body } });
+        itemRuns.push({
+          text: stripMarkdown(it) + (i < col.items.length - 1 ? '\n\n' : ''),
+          options: { fontSize: 9, color: COLORS.darkText, fontFace: FONTS.body }
+        });
+      });
+
+      actionPlanSlide.addText(itemRuns, {
+        x: col.x + 0.15, y: 1.75, w: 2.5, h: 3.1,
+        valign: 'top',
+        lineSpacingMultiple: 1.15,
+        shrinkText: true,
+      });
+    } else {
+      actionPlanSlide.addText('No tasks defined.', {
+        x: col.x + 0.15, y: 1.75, w: 2.5, h: 1.0,
+        fontSize: 9, color: COLORS.mutedText, fontFace: FONTS.body,
+      });
+    }
+  });
+
+  // ─── 5. CONCLUSION / THANK YOU SLIDE ──────────────────────────────────
+  const endSlide = pptx.addSlide();
+  applyDarkSlideLayout(endSlide, shapes);
+
+  endSlide.addText('End of Report', {
+    x: 0.8, y: 1.6, w: 7.0, h: 0.5,
+    fontSize: 14, bold: true,
+    color: COLORS.orange,
+    fontFace: FONTS.heading,
+  });
+
+  endSlide.addText('Thank You.', {
+    x: 0.8, y: 2.1, w: 7.0, h: 1.2,
+    fontSize: 52, bold: true,
+    color: COLORS.lightText,
+    fontFace: FONTS.heading,
+  });
+
+  endSlide.addText('Integrity Matters  //  Building Client Success', {
+    x: 0.8, y: 3.6, w: 7.0, h: 0.4,
+    fontSize: 11, color: COLORS.lightMuted,
+    fontFace: FONTS.body,
+  });
+
+  // Client info at bottom
+  endSlide.addText(`${clientName}  •  ${generatedAt}`, {
+    x: 0.8, y: 4.2, w: 7.0, h: 0.3,
+    fontSize: 9, color: COLORS.lightMuted,
+    fontFace: FONTS.body,
+  });
+}
+
+
+// =============================================================================
+// MODULE B: DISCOVERY & PRE-SCOPING DECK
+// =============================================================================
+
+function buildPreScopingDeck(pptx, shapes, data, clientName, generatedAt) {
+
+  // ─── 1. TITLE SLIDE ─────────────────────────────────────────────────
+  const titleSlide = pptx.addSlide();
+  applyDarkSlideLayout(titleSlide, shapes);
+
+  titleSlide.addShape(shapes.RECTANGLE, {
+    x: 0.0, y: 0.0, w: 0.12, h: 5.625,
+    fill: { color: COLORS.orange }
+  });
+  titleSlide.addShape(shapes.RECTANGLE, {
+    x: 0.12, y: 0.0, w: 0.06, h: 5.625,
+    fill: { color: COLORS.deepOrange }
+  });
+
+  titleSlide.addText('INTEGRITY MATTERS // DIGITAL DISCOVERY', {
+    x: 0.7, y: 1.2, w: 7.0, h: 0.4,
+    fontSize: 12, bold: true,
+    color: COLORS.orange,
+    fontFace: FONTS.heading,
+  });
+
+  titleSlide.addText('Discovery &\nPre-Scoping', {
+    x: 0.7, y: 1.7, w: 7.0, h: 1.8,
+    fontSize: 48, bold: true,
+    color: COLORS.lightText,
+    fontFace: FONTS.heading,
+    lineSpacingMultiple: 1.1,
+  });
+
+  titleSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+    x: 0.7, y: 3.8, w: 5.5, h: 1.2,
+    fill: { color: COLORS.darkCard },
+    rectRadius: 0.1,
+  });
+
+  titleSlide.addText(
+    [
+      { text: 'CLIENT:  ', options: { fontSize: 10, color: COLORS.orange, bold: true, fontFace: FONTS.heading } },
+      { text: clientName + '\n', options: { fontSize: 10, color: COLORS.lightText, fontFace: FONTS.body } },
+      { text: 'DATE:  ', options: { fontSize: 10, color: COLORS.orange, bold: true, fontFace: FONTS.heading } },
+      { text: generatedAt + '\n', options: { fontSize: 10, color: COLORS.lightMuted, fontFace: FONTS.body } },
+      { text: 'PREPARED BY:  ', options: { fontSize: 10, color: COLORS.orange, bold: true, fontFace: FONTS.heading } },
+      { text: 'Digital Strategy Team', options: { fontSize: 10, color: COLORS.lightMuted, fontFace: FONTS.body } },
+    ],
+    {
+      x: 0.95, y: 3.9, w: 5.0, h: 1.0,
+      lineSpacingMultiple: 1.5,
+      valign: 'middle',
+    }
+  );
+
+  // ─── 2. COMPETITOR ANALYSIS ──────────────────────────────────────────
+  const compSlide = pptx.addSlide();
+  applyLightSlideLayout(compSlide, 'Competitor Benchmarking', clientName, shapes);
+
+  const competitors = data.competitor_analysis || [];
+  if (competitors.length === 0) {
+    compSlide.addText('No competitor analysis provided.', {
+      x: 0.5, y: 1.5, w: 9.0, h: 1.0,
+      fontSize: 12, color: COLORS.mutedText, fontFace: FONTS.body,
+    });
+  } else {
+    const maxComp = Math.min(competitors.length, 3);
+    const colW = (9.0 - (0.3 * (maxComp - 1))) / maxComp;
+
+    competitors.slice(0, 3).forEach((comp, idx) => {
+      const xPos = 0.5 + (idx * (colW + 0.3));
+
+      // Card background
+      compSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+        x: xPos, y: 1.0, w: colW, h: 4.0,
+        fill: { color: COLORS.lightBg },
+        line: { color: COLORS.border, width: 1 },
+        rectRadius: 0.1,
+      });
+
+      // Orange header stripe
+      compSlide.addShape(shapes.RECTANGLE, {
+        x: xPos, y: 1.0, w: colW, h: 0.06,
+        fill: { color: COLORS.orange },
+      });
+
+      // Competitor name
+      compSlide.addText(stripMarkdown(comp.competitor_name || '').toUpperCase(), {
+        x: xPos + 0.15, y: 1.2, w: colW - 0.3, h: 0.3,
+        fontSize: 12, bold: true,
+        color: COLORS.orange,
+        fontFace: FONTS.heading,
+      });
+
+      // URL
+      compSlide.addText(comp.url || '', {
+        x: xPos + 0.15, y: 1.5, w: colW - 0.3, h: 0.2,
+        fontSize: 8, color: COLORS.mutedText,
+        fontFace: FONTS.body,
+      });
+
+      // Content
+      const findingsBulleted = (comp.key_findings || []).map(f => `●  ${stripMarkdown(f)}`).join('\n');
+      const textBlock = [
+        { text: 'Observation:\n', options: { fontSize: 8.5, bold: true, color: COLORS.darkText, fontFace: FONTS.heading } },
+        { text: stripMarkdown(comp.observation || '') + '\n\n', options: { fontSize: 8, color: COLORS.mutedText, fontFace: FONTS.body } },
+        { text: 'Key Findings:\n', options: { fontSize: 8.5, bold: true, color: COLORS.darkText, fontFace: FONTS.heading } },
+        { text: findingsBulleted + '\n\n', options: { fontSize: 8, color: COLORS.mutedText, fontFace: FONTS.body } },
+        { text: 'Takeaway:\n', options: { fontSize: 8.5, bold: true, color: COLORS.orange, fontFace: FONTS.heading } },
+        { text: stripMarkdown(comp.key_takeaway || ''), options: { fontSize: 8, color: COLORS.darkText, fontFace: FONTS.body } },
+      ];
+
+      compSlide.addText(textBlock, {
+        x: xPos + 0.15, y: 1.8, w: colW - 0.3, h: 3.0,
+        valign: 'top',
+        lineSpacingMultiple: 1.15,
+        shrinkText: true,
+      });
+    });
+  }
+
+  // ─── 3. ACTIONABLE REQUIREMENTS ──────────────────────────────────────
+  const reqSlide = pptx.addSlide();
+  applyLightSlideLayout(reqSlide, 'Actionable Requirements Map', clientName, shapes);
+
+  const actReqs = data.actionable_requirements || [];
+  if (actReqs.length === 0) {
+    reqSlide.addText('No actionable requirements recorded.', {
+      x: 0.5, y: 1.5, w: 9.0, h: 1.0,
+      fontSize: 12, color: COLORS.mutedText, fontFace: FONTS.body,
+    });
+  } else {
+    const tableData = [
+      [
+        { text: 'CATEGORY', options: { fill: COLORS.orange, color: COLORS.lightText, bold: true, fontFace: FONTS.heading, fontSize: 10, valign: 'middle' } },
+        { text: 'FINDING', options: { fill: COLORS.orange, color: COLORS.lightText, bold: true, fontFace: FONTS.heading, fontSize: 10, valign: 'middle' } },
+        { text: 'REQUIREMENT SPECIFICATION', options: { fill: COLORS.orange, color: COLORS.lightText, bold: true, fontFace: FONTS.heading, fontSize: 10, valign: 'middle' } },
+      ]
+    ];
+
+    actReqs.slice(0, 7).forEach((req, idx) => {
+      const rowFill = idx % 2 === 0 ? COLORS.white : COLORS.lightBg;
+      tableData.push([
+        { text: stripMarkdown(req.category || 'General'), options: { color: COLORS.orange, fontFace: FONTS.heading, fontSize: 9, fill: rowFill, valign: 'middle' } },
+        { text: stripMarkdown(req.finding || ''), options: { color: COLORS.darkText, fontFace: FONTS.body, fontSize: 8.5, fill: rowFill, valign: 'middle' } },
+        { text: stripMarkdown(req.requirement || ''), options: { color: COLORS.mutedText, fontFace: FONTS.body, fontSize: 8.5, fill: rowFill, valign: 'middle' } },
+      ]);
+    });
+
+    reqSlide.addTable(tableData, {
+      x: 0.5, y: 1.0, w: 9.0,
+      colW: [2.0, 3.5, 3.5],
+      border: { type: 'solid', color: COLORS.border, pt: 0.5 },
+      rowH: [0.4, ...Array(tableData.length - 1).fill(0.5)],
+    });
+  }
+
+  // ─── 4. INFORMATION ARCHITECTURE ─────────────────────────────────────
+  const iaSlide = pptx.addSlide();
+  applyLightSlideLayout(iaSlide, 'Information Architecture & Sitemap', clientName, shapes);
+
+  const ia = data.information_architecture || {};
+
+  // Left: Primary Navigation
+  iaSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+    x: 0.5, y: 1.0, w: 4.2, h: 4.0,
+    fill: { color: COLORS.lightBg },
+    line: { color: COLORS.border, width: 1 },
+    rectRadius: 0.1,
+  });
+
+  iaSlide.addShape(shapes.RECTANGLE, {
+    x: 0.5, y: 1.0, w: 4.2, h: 0.06,
+    fill: { color: COLORS.orange },
+  });
+
+  iaSlide.addText('PRIMARY NAVIGATION SITEMAP', {
+    x: 0.7, y: 1.2, w: 3.8, h: 0.3,
+    fontSize: 12, bold: true,
+    color: COLORS.orange,
+    fontFace: FONTS.heading,
+  });
+
+  const primaryPages = (ia.primary_pages || []).map(p => `●  ${stripMarkdown(p)}`).join('\n\n');
+  iaSlide.addText(primaryPages || 'None defined.', {
+    x: 0.7, y: 1.6, w: 3.8, h: 3.2,
+    fontSize: 10, color: COLORS.darkText,
+    fontFace: FONTS.body,
+    lineSpacingMultiple: 1.2,
+    valign: 'top',
+    shrinkText: true,
+  });
+
+  // Right top: Templates
+  iaSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+    x: 5.0, y: 1.0, w: 4.5, h: 1.8,
+    fill: { color: COLORS.lightBg },
+    line: { color: COLORS.border, width: 1 },
+    rectRadius: 0.1,
+  });
+
+  iaSlide.addText('TEMPLATE-BASED PAGE STRUCTURES', {
+    x: 5.2, y: 1.1, w: 4.1, h: 0.3,
+    fontSize: 11, bold: true,
+    color: COLORS.deepOrange,
+    fontFace: FONTS.heading,
+  });
+
+  const tempText = (ia.template_based_pages || []).map(t => `${stripMarkdown(t.template_type)} (${stripMarkdown(t.usage)})`).join(' | ');
+  iaSlide.addText(tempText || 'None defined.', {
+    x: 5.2, y: 1.5, w: 4.1, h: 1.1,
+    fontSize: 9, color: COLORS.darkText,
+    fontFace: FONTS.body,
+    lineSpacingMultiple: 1.2,
+    valign: 'top',
+    shrinkText: true,
+  });
+
+  // Right bottom: Dynamic Pages
+  iaSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+    x: 5.0, y: 3.0, w: 4.5, h: 2.0,
+    fill: { color: COLORS.lightBg },
+    line: { color: COLORS.border, width: 1 },
+    rectRadius: 0.1,
+  });
+
+  iaSlide.addText('DYNAMIC ARCHIVES & PAGES', {
+    x: 5.2, y: 3.1, w: 4.1, h: 0.3,
+    fontSize: 11, bold: true,
+    color: COLORS.orange,
+    fontFace: FONTS.heading,
+  });
+
+  const dynamicPagesText = (ia.dynamic_pages || []).map(p => `●  ${stripMarkdown(p)}`).join('\n');
+  iaSlide.addText(dynamicPagesText || 'None defined.', {
+    x: 5.2, y: 3.5, w: 4.1, h: 1.3,
+    fontSize: 9, color: COLORS.mutedText,
+    fontFace: FONTS.body,
+    lineSpacingMultiple: 1.15,
+    valign: 'top',
+    shrinkText: true,
+  });
+
+  // ─── 5. FEATURE REQUIREMENTS ─────────────────────────────────────────
+  const featSlide = pptx.addSlide();
+  applyLightSlideLayout(featSlide, 'Scoped Feature Specifications', clientName, shapes);
+
+  const featReqs = data.feature_requirements || [];
+  if (featReqs.length === 0) {
+    featSlide.addText('No specific feature requirements.', {
+      x: 0.5, y: 1.5, w: 9.0, h: 1.0,
+      fontSize: 12, color: COLORS.mutedText, fontFace: FONTS.body,
+    });
+  } else {
+    const tableData = [
+      [
+        { text: 'PAGE TYPE', options: { fill: COLORS.orange, color: COLORS.lightText, bold: true, fontFace: FONTS.heading, fontSize: 10, valign: 'middle' } },
+        { text: 'FEATURE SPEC', options: { fill: COLORS.orange, color: COLORS.lightText, bold: true, fontFace: FONTS.heading, fontSize: 10, valign: 'middle' } },
+        { text: 'BEHAVIOR DESCRIPTION', options: { fill: COLORS.orange, color: COLORS.lightText, bold: true, fontFace: FONTS.heading, fontSize: 10, valign: 'middle' } },
+        { text: 'MVP', options: { fill: COLORS.orange, color: COLORS.lightText, bold: true, fontFace: FONTS.heading, fontSize: 10, valign: 'middle' } },
+      ]
+    ];
+
+    const flatFeats = [];
+    featReqs.forEach((fr) => {
+      const pageType = fr.page_type || 'General';
+      (fr.features || []).forEach((feat) => {
+        flatFeats.push({ pageType, ...feat });
+      });
+    });
+
+    flatFeats.slice(0, 7).forEach((item, idx) => {
+      const rowFill = idx % 2 === 0 ? COLORS.white : COLORS.lightBg;
+      tableData.push([
+        { text: stripMarkdown(item.pageType), options: { color: COLORS.orange, fontFace: FONTS.heading, fontSize: 8.5, fill: rowFill, valign: 'middle' } },
+        { text: stripMarkdown(item.feature), options: { color: COLORS.darkText, fontFace: FONTS.body, fontSize: 8.5, bold: true, fill: rowFill, valign: 'middle' } },
+        { text: stripMarkdown(item.description), options: { color: COLORS.mutedText, fontFace: FONTS.body, fontSize: 8, fill: rowFill, valign: 'middle' } },
+        { text: item.mandatory ? 'YES' : 'NO (V2)', options: { color: item.mandatory ? COLORS.emerald : COLORS.amber, fontFace: FONTS.heading, fontSize: 8.5, bold: true, fill: rowFill, align: 'center', valign: 'middle' } },
+      ]);
+    });
+
+    featSlide.addTable(tableData, {
+      x: 0.5, y: 1.0, w: 9.0,
+      colW: [1.8, 2.2, 3.8, 1.2],
+      border: { type: 'solid', color: COLORS.border, pt: 0.5 },
+      rowH: [0.4, ...Array(tableData.length - 1).fill(0.5)],
+    });
+  }
+
+  // ─── 6. FORMS AND USER JOURNEYS ──────────────────────────────────────
+  const formSlide = pptx.addSlide();
+  applyLightSlideLayout(formSlide, 'Forms & User Navigation Journeys', clientName, shapes);
+
+  const fj = data.forms_and_journeys || {};
+
+  // Left: Forms
+  formSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+    x: 0.5, y: 1.0, w: 4.2, h: 4.0,
+    fill: { color: COLORS.lightBg },
+    line: { color: COLORS.border, width: 1 },
+    rectRadius: 0.1,
+  });
+
+  formSlide.addShape(shapes.RECTANGLE, {
+    x: 0.5, y: 1.0, w: 4.2, h: 0.06,
+    fill: { color: COLORS.orange },
+  });
+
+  formSlide.addText('LEAD & CONVERSION FORMS', {
+    x: 0.7, y: 1.2, w: 3.8, h: 0.3,
+    fontSize: 12, bold: true,
+    color: COLORS.orange,
+    fontFace: FONTS.heading,
+  });
+
+  const formsList = fj.forms || [];
+  if (formsList.length === 0) {
+    formSlide.addText('No forms defined.', {
+      x: 0.7, y: 1.6, w: 3.8, h: 1.0,
+      fontSize: 10, color: COLORS.mutedText, fontFace: FONTS.body,
+    });
+  } else {
+    const formRuns = [];
+    formsList.slice(0, 3).forEach((frm, i) => {
+      formRuns.push({ text: stripMarkdown(frm.form_name || ''), options: { fontSize: 9, bold: true, color: COLORS.darkText, fontFace: FONTS.heading } });
+      formRuns.push({ text: `  (Page: ${stripMarkdown(frm.trigger_page || '')})\n`, options: { fontSize: 8, color: COLORS.mutedText, fontFace: FONTS.body } });
+      formRuns.push({ text: `Fields: ${(frm.fields || []).map(f => stripMarkdown(f)).join(', ')}\n`, options: { fontSize: 8, color: COLORS.mutedText, fontFace: FONTS.body } });
+      formRuns.push({ text: `After submit: ${stripMarkdown(frm.post_submission_action || '')}\n`, options: { fontSize: 8, color: COLORS.mutedText, fontFace: FONTS.body } });
+      if (i < Math.min(formsList.length, 3) - 1) {
+        formRuns.push({ text: '\n', options: { fontSize: 6 } });
+      }
+    });
+
+    formSlide.addText(formRuns, {
+      x: 0.7, y: 1.6, w: 3.8, h: 3.2,
+      valign: 'top',
+      lineSpacingMultiple: 1.2,
+      shrinkText: true,
+    });
+  }
+
+  // Right: User Journeys
+  formSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+    x: 5.0, y: 1.0, w: 4.5, h: 4.0,
+    fill: { color: COLORS.lightBg },
+    line: { color: COLORS.border, width: 1 },
+    rectRadius: 0.1,
+  });
+
+  formSlide.addShape(shapes.RECTANGLE, {
+    x: 5.0, y: 1.0, w: 4.5, h: 0.06,
+    fill: { color: COLORS.deepOrange },
+  });
+
+  formSlide.addText('CLIENT CONVERSION JOURNEYS', {
+    x: 5.2, y: 1.2, w: 4.1, h: 0.3,
+    fontSize: 12, bold: true,
+    color: COLORS.deepOrange,
+    fontFace: FONTS.heading,
+  });
+
+  const journeys = fj.user_journeys || [];
+  if (journeys.length === 0) {
+    formSlide.addText('No user journeys defined.', {
+      x: 5.2, y: 1.6, w: 4.1, h: 1.0,
+      fontSize: 10, color: COLORS.mutedText, fontFace: FONTS.body,
+    });
+  } else {
+    const journeyRuns = [];
+    journeys.slice(0, 3).forEach((j, i) => {
+      journeyRuns.push({ text: `Persona: `, options: { fontSize: 8.5, bold: true, color: COLORS.darkText, fontFace: FONTS.heading } });
+      journeyRuns.push({ text: `${stripMarkdown(j.user_type || '')} (Entry: ${stripMarkdown(j.entry_point || '')})\n`, options: { fontSize: 8, color: COLORS.mutedText, fontFace: FONTS.body } });
+      journeyRuns.push({ text: `Path: `, options: { fontSize: 8.5, bold: true, color: COLORS.darkText, fontFace: FONTS.heading } });
+      journeyRuns.push({ text: `${stripMarkdown(j.action || '')}\n`, options: { fontSize: 8, color: COLORS.mutedText, fontFace: FONTS.body } });
+      journeyRuns.push({ text: `Goal: `, options: { fontSize: 8.5, bold: true, color: COLORS.orange, fontFace: FONTS.heading } });
+      journeyRuns.push({ text: stripMarkdown(j.outcome || '') + '\n', options: { fontSize: 8, color: COLORS.darkText, fontFace: FONTS.body } });
+      if (i < Math.min(journeys.length, 3) - 1) {
+        journeyRuns.push({ text: '\n', options: { fontSize: 6 } });
+      }
+    });
+
+    formSlide.addText(journeyRuns, {
+      x: 5.2, y: 1.6, w: 4.1, h: 3.2,
+      valign: 'top',
+      lineSpacingMultiple: 1.2,
+      shrinkText: true,
+    });
+  }
+
+  // ─── 7. TECHNICAL REQUIREMENTS ───────────────────────────────────────
+  const techSlide = pptx.addSlide();
+  applyLightSlideLayout(techSlide, 'Technical Architecture & Specifications', clientName, shapes);
+
+  const tech = data.technical_requirements || {};
+  const techSpecs = [
+    { label: 'PLATFORM / CMS', val: tech.platform_cms || 'Not decided', icon: '🖥' },
+    { label: 'THEME / CUSTOM DEV', val: tech.theme_structure || 'Not decided', icon: '🎨' },
+    { label: 'HOSTING & INFRA', val: tech.hosting || 'Not decided', icon: '☁' },
+    { label: 'PERFORMANCE', val: tech.performance || 'Not decided', icon: '⚡' },
+    { label: 'SECURITY', val: tech.security || 'Not decided', icon: '🔒' },
+  ];
+
+  techSpecs.forEach((spec, idx) => {
+    const yPos = 1.0 + (idx * 0.82);
+
+    // Row card
+    techSlide.addShape(shapes.ROUNDED_RECTANGLE, {
+      x: 0.5, y: yPos, w: 9.0, h: 0.7,
+      fill: { color: idx % 2 === 0 ? COLORS.lightBg : COLORS.white },
+      line: { color: COLORS.border, width: 0.5 },
+      rectRadius: 0.06,
+    });
+
+    // Orange left accent
+    techSlide.addShape(shapes.RECTANGLE, {
+      x: 0.5, y: yPos, w: 0.06, h: 0.7,
+      fill: { color: COLORS.orange },
+    });
+
+    // Label
+    techSlide.addText(spec.label, {
+      x: 0.75, y: yPos + 0.1, w: 2.2, h: 0.5,
+      fontSize: 10, bold: true,
+      color: COLORS.orange,
+      fontFace: FONTS.heading,
+      valign: 'middle',
+    });
+
+    // Value
+    techSlide.addText(stripMarkdown(spec.val), {
+      x: 3.1, y: yPos + 0.1, w: 6.2, h: 0.5,
+      fontSize: 9, color: COLORS.darkText,
+      fontFace: FONTS.body,
+      valign: 'middle',
+      shrinkText: true,
+    });
+  });
+
+  // ─── 8. CONTENT OWNERSHIP ────────────────────────────────────────────
+  const ownSlide = pptx.addSlide();
+  applyLightSlideLayout(ownSlide, 'Content Resource & Ownership Matrix', clientName, shapes);
+
+  const ownership = data.content_ownership || [];
+  if (ownership.length === 0) {
+    ownSlide.addText('No content ownership records.', {
+      x: 0.5, y: 1.5, w: 9.0, h: 1.0,
+      fontSize: 12, color: COLORS.mutedText, fontFace: FONTS.body,
+    });
+  } else {
+    const tableData = [
+      [
+        { text: 'SECTION', options: { fill: COLORS.orange, color: COLORS.lightText, bold: true, fontFace: FONTS.heading, fontSize: 10, valign: 'middle' } },
+        { text: 'CONTENT SPEC', options: { fill: COLORS.orange, color: COLORS.lightText, bold: true, fontFace: FONTS.heading, fontSize: 10, valign: 'middle' } },
+        { text: 'SOURCE', options: { fill: COLORS.orange, color: COLORS.lightText, bold: true, fontFace: FONTS.heading, fontSize: 10, valign: 'middle' } },
+        { text: 'RESPONSIBILITY', options: { fill: COLORS.orange, color: COLORS.lightText, bold: true, fontFace: FONTS.heading, fontSize: 10, valign: 'middle' } },
+      ]
+    ];
+
+    ownership.slice(0, 7).forEach((own, idx) => {
+      const rowFill = idx % 2 === 0 ? COLORS.white : COLORS.lightBg;
+      tableData.push([
+        { text: stripMarkdown(own.section || 'General'), options: { color: COLORS.orange, fontFace: FONTS.heading, fontSize: 8.5, fill: rowFill, valign: 'middle' } },
+        { text: stripMarkdown(own.content_required || ''), options: { color: COLORS.darkText, fontFace: FONTS.body, fontSize: 8, fill: rowFill, valign: 'middle' } },
+        { text: stripMarkdown(own.source || 'New'), options: { color: COLORS.darkText, fontFace: FONTS.body, fontSize: 8.5, fill: rowFill, valign: 'middle' } },
+        { text: stripMarkdown(own.responsibility || 'Client'), options: { color: COLORS.deepOrange, fontFace: FONTS.heading, fontSize: 8.5, bold: true, fill: rowFill, valign: 'middle' } },
+      ]);
+    });
+
+    ownSlide.addTable(tableData, {
+      x: 0.5, y: 1.0, w: 9.0,
+      colW: [2.0, 3.5, 1.8, 1.7],
+      border: { type: 'solid', color: COLORS.border, pt: 0.5 },
+      rowH: [0.4, ...Array(tableData.length - 1).fill(0.5)],
+    });
+  }
+
+  // ─── 9. CONCLUSION ───────────────────────────────────────────────────
+  const endSlide = pptx.addSlide();
+  applyDarkSlideLayout(endSlide, shapes);
+
+  endSlide.addText('End of Pre-Scoping Deck', {
+    x: 0.8, y: 1.6, w: 7.0, h: 0.5,
+    fontSize: 14, bold: true,
+    color: COLORS.orange,
+    fontFace: FONTS.heading,
+  });
+
+  endSlide.addText('Ready for\nReview.', {
+    x: 0.8, y: 2.1, w: 7.0, h: 1.4,
+    fontSize: 48, bold: true,
+    color: COLORS.lightText,
+    fontFace: FONTS.heading,
+    lineSpacingMultiple: 1.1,
+  });
+
+  endSlide.addText('Integrity Matters  //  Building Client Success', {
+    x: 0.8, y: 3.8, w: 7.0, h: 0.4,
+    fontSize: 11, color: COLORS.lightMuted,
+    fontFace: FONTS.body,
+  });
+
+  endSlide.addText(`${clientName}  •  ${generatedAt}`, {
+    x: 0.8, y: 4.3, w: 7.0, h: 0.3,
+    fontSize: 9, color: COLORS.lightMuted,
+    fontFace: FONTS.body,
+  });
 }
