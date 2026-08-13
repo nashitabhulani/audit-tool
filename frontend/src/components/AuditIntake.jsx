@@ -1,3 +1,4 @@
+import { API_BASE } from '../config.js';
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Sparkles, AlertCircle, HelpCircle } from 'lucide-react';
 
@@ -77,7 +78,7 @@ export default function AuditIntake({ onBack, onGenerateComplete }) {
     };
 
     try {
-      const res = await fetch('/api/deliverables', {
+      const res = await fetch(API_BASE + '/api/deliverables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

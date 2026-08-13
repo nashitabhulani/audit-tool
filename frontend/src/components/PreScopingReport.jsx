@@ -1,3 +1,4 @@
+import { API_BASE } from '../config.js';
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Download, RefreshCw, Layers, Compass, Cpu, FileSpreadsheet, Users, HardDrive, ListCollapse } from 'lucide-react';
 import EditableField from './EditableField';

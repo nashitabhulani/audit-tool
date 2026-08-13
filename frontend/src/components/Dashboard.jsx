@@ -1,3 +1,4 @@
+import { API_BASE } from '../config.js';
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, FileText, Calendar, Trash2, ArrowRight, ShieldAlert, Sparkles } from 'lucide-react';
 
@@ -16,7 +17,7 @@ export default function Dashboard({ onCreateAudit, onCreatePreScoping, onViewDel
   const fetchDeliverables = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/deliverables');
+      const res = await fetch(API_BASE + '/api/deliverables');
       if (!res.ok) throw new Error('Failed to load history list.');
       const data = await res.json();
       setDeliverables(data);
