@@ -160,13 +160,14 @@ app.get('/api/deliverables/:id/export', async (req, res) => {
   }
 });
 
-// Static assets (for future build hosting if needed)
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
+// Root endpoint for health checks (Render, etc.)
+app.get('/', (req, res) => {
+  res.send('Google Antigravity Backend is running and ready for API requests.');
+});
 
-// Serve index.html as fallback for React router (if built)
-app.get('*', (req, res, next) => {
-  if (req.url.startsWith('/api')) return next();
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+// Fallback for missing API routes
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint not found.' });
 });
 
 // Startup Server
