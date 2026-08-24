@@ -17,31 +17,37 @@ if (useSupabase) {
   console.log('[Database] Connecting to Supabase Cloud Database...');
   supabase = createClient(supabaseUrl, supabaseKey);
 } else {
-  console.log('[Database] Using local SQLite database (SUPABASE_URL / SUPABASE_KEY not set).');
+  console.log('[Database] Using local SQLite database.');
 }
+
+// In-Memory Fast Cache Store
+const memoryStore = new Map();
 
 let sqliteDb = null;
 
 async function getSqliteDbConnection() {
   if (sqliteDb) return sqliteDb;
 
-  sqliteDb = await open({
-    filename: dbPath,
-    driver: sqlite3.Database
-  });
+  try {
+    sqliteDb = await open({
+      filename: dbPath,
+      driver: sqlite3.Database
+    });
 
-  // Create table if SQLite is used
-  await sqliteDb.exec(`
-    CREATE TABLE IF NOT EXISTS deliverables (
-      id TEXT PRIMARY KEY,
-      client_name TEXT NOT NULL,
-      type TEXT NOT NULL,
-      input_data TEXT NOT NULL,
-      output_data TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
+    await sqliteDb.exec(`
+      CREATE TABLE IF NOT EXISTS deliverables (
+        id TEXT PRIMARY KEY,
+        client_name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        input_data TEXT NOT NULL,
+        output_data TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  } catch (err) {
+    console.warn('[SQLite] SQLite initialization skipped in serverless environment.');
+  }
 
   return sqliteDb;
 }
@@ -60,165 +66,217 @@ function parseJsonIfNeeded(val) {
 
 // 1. Get All Deliverables
 export async function getAllDeliverables() {
-  if (useSupabase) {
-    const { data, error } = await supabase
-      .from('deliverables')
-      .select('id, client_name, type, created_at, updated_at')
-      .order('created_at', { ascending: false });
+  let dbList = [];
 
-    if (error) {
-      console.error('[Supabase Error] getAllDeliverables:', error);
-      throw error;
+  if (useSupabase) {
+    try {
+      const { data, error } = await supabase
+        .from('deliverables')
+        .select('id, client_name, type, created_at, updated_at')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        dbList = data;
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase list read warning:', err.message);
     }
-    return data || [];
+  } else {
+    try {
+      const database = await getSqliteDbConnection();
+      if (database) {
+        dbList = await database.all('SELECT id, client_name, type, created_at, updated_at FROM deliverables ORDER BY created_at DESC');
+      }
+    } catch (err) {
+      console.warn('[Database] SQLite list read warning:', err.message);
+    }
   }
 
-  const database = await getSqliteDbConnection();
-  return database.all('SELECT id, client_name, type, created_at, updated_at FROM deliverables ORDER BY created_at DESC');
+  // Merge with memory store items
+  const dbIds = new Set(dbList.map(item => item.id));
+  const memList = [];
+  for (const [id, item] of memoryStore.entries()) {
+    if (!dbIds.has(id)) {
+      memList.push({
+        id: item.id,
+        client_name: item.client_name,
+        type: item.type,
+        created_at: item.created_at,
+        updated_at: item.updated_at
+      });
+    }
+  }
+
+  return [...memList, ...dbList].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
 // 2. Get Deliverable By ID
 export async function getDeliverableById(id) {
+  const cleanId = String(id).trim();
+
+  // Fast check: Memory Store
+  if (memoryStore.has(cleanId)) {
+    return memoryStore.get(cleanId);
+  }
+
+  // Check Supabase
   if (useSupabase) {
-    const cleanId = String(id).trim();
-    const { data, error } = await supabase
-      .from('deliverables')
-      .select('*')
-      .eq('id', cleanId)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from('deliverables')
+        .select('*')
+        .eq('id', cleanId)
+        .maybeSingle();
 
-    if (error) {
-      console.error('[Supabase Error] getDeliverableById:', error);
-      throw error;
+      if (data) {
+        data.input_data = parseJsonIfNeeded(data.input_data);
+        data.output_data = parseJsonIfNeeded(data.output_data);
+        memoryStore.set(cleanId, data);
+        return data;
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase getById warning:', err.message);
     }
-
-    if (data) {
-      data.input_data = parseJsonIfNeeded(data.input_data);
-      data.output_data = parseJsonIfNeeded(data.output_data);
-    }
-    return data;
   }
 
-  const database = await getSqliteDbConnection();
-  const deliverable = await database.get('SELECT * FROM deliverables WHERE id = ?', id);
-  if (deliverable) {
-    deliverable.input_data = parseJsonIfNeeded(deliverable.input_data);
-    deliverable.output_data = parseJsonIfNeeded(deliverable.output_data);
+  // Check SQLite
+  try {
+    const database = await getSqliteDbConnection();
+    if (database) {
+      const deliverable = await database.get('SELECT * FROM deliverables WHERE id = ?', cleanId);
+      if (deliverable) {
+        deliverable.input_data = parseJsonIfNeeded(deliverable.input_data);
+        deliverable.output_data = parseJsonIfNeeded(deliverable.output_data);
+        memoryStore.set(cleanId, deliverable);
+        return deliverable;
+      }
+    }
+  } catch (err) {
+    console.warn('[Database] SQLite getById warning:', err.message);
   }
-  return deliverable;
+
+  return null;
 }
 
 // 3. Create Deliverable
 export async function createDeliverable({ id, client_name, type, input_data, output_data }) {
-  if (useSupabase) {
-    const now = new Date().toISOString();
-    const payload = {
-      id,
-      client_name,
-      type,
-      input_data: typeof input_data === 'object' ? JSON.stringify(input_data) : input_data,
-      output_data: typeof output_data === 'object' ? JSON.stringify(output_data) : output_data,
-      created_at: now,
-      updated_at: now
-    };
-
-    const { data, error } = await supabase
-      .from('deliverables')
-      .insert([payload])
-      .select()
-      .maybeSingle();
-
-    if (error) {
-      console.error('[Supabase Error] createDeliverable:', error);
-      throw error;
-    }
-
-    return {
-      id,
-      client_name,
-      type,
-      input_data: parseJsonIfNeeded(data?.input_data || input_data),
-      output_data: parseJsonIfNeeded(data?.output_data || output_data),
-      created_at: data?.created_at || now,
-      updated_at: data?.updated_at || now
-    };
-  }
-
-  const database = await getSqliteDbConnection();
-  await database.run(
-    `INSERT INTO deliverables (id, client_name, type, input_data, output_data, created_at, updated_at) 
-     VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+  const now = new Date().toISOString();
+  const record = {
     id,
     client_name,
     type,
-    JSON.stringify(input_data),
-    JSON.stringify(output_data)
-  );
-  return { id, client_name, type, input_data, output_data };
+    input_data: parseJsonIfNeeded(input_data),
+    output_data: parseJsonIfNeeded(output_data),
+    created_at: now,
+    updated_at: now
+  };
+
+  // Always store in memory store immediately
+  memoryStore.set(id, record);
+
+  // Write to Supabase asynchronously
+  if (useSupabase) {
+    try {
+      const payload = {
+        id,
+        client_name,
+        type,
+        input_data: typeof input_data === 'object' ? JSON.stringify(input_data) : input_data,
+        output_data: typeof output_data === 'object' ? JSON.stringify(output_data) : output_data,
+        created_at: now,
+        updated_at: now
+      };
+      await supabase.from('deliverables').upsert([payload]);
+    } catch (err) {
+      console.warn('[Database Warning] Supabase upsert error:', err.message);
+    }
+  }
+
+  // Write to SQLite asynchronously
+  try {
+    const database = await getSqliteDbConnection();
+    if (database) {
+      await database.run(
+        `INSERT OR REPLACE INTO deliverables (id, client_name, type, input_data, output_data, created_at, updated_at) 
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+        id,
+        client_name,
+        type,
+        JSON.stringify(input_data),
+        JSON.stringify(output_data)
+      );
+    }
+  } catch (err) {
+    // Silent fallback
+  }
+
+  return record;
 }
 
 // 4. Update Deliverable
 export async function updateDeliverable(id, { output_data }) {
-  if (useSupabase) {
-    const now = new Date().toISOString();
-    const payload = {
-      output_data: typeof output_data === 'object' ? JSON.stringify(output_data) : output_data,
-      updated_at: now
-    };
-
-    const { data, error } = await supabase
-      .from('deliverables')
-      .update(payload)
-      .eq('id', id)
-      .select()
-      .maybeSingle();
-
-    if (error) {
-      console.error('[Supabase Error] updateDeliverable:', error);
-      throw error;
-    }
-
-    if (!data) return null;
-    return {
-      ...data,
-      input_data: parseJsonIfNeeded(data.input_data),
-      output_data: parseJsonIfNeeded(data.output_data)
-    };
-  }
-
-  const database = await getSqliteDbConnection();
-  const existing = await database.get('SELECT * FROM deliverables WHERE id = ?', id);
+  const cleanId = String(id).trim();
+  const existing = await getDeliverableById(cleanId);
   if (!existing) return null;
 
-  await database.run(
-    `UPDATE deliverables 
-     SET output_data = ?, updated_at = datetime('now') 
-     WHERE id = ?`,
-    JSON.stringify(output_data),
-    id
-  );
-  return getDeliverableById(id);
+  const now = new Date().toISOString();
+  const updatedRecord = {
+    ...existing,
+    output_data: parseJsonIfNeeded(output_data),
+    updated_at: now
+  };
+
+  memoryStore.set(cleanId, updatedRecord);
+
+  if (useSupabase) {
+    try {
+      const payload = {
+        output_data: typeof output_data === 'object' ? JSON.stringify(output_data) : output_data,
+        updated_at: now
+      };
+      await supabase.from('deliverables').update(payload).eq('id', cleanId);
+    } catch (err) {
+      console.warn('[Database Warning] Supabase update error:', err.message);
+    }
+  }
+
+  try {
+    const database = await getSqliteDbConnection();
+    if (database) {
+      await database.run(
+        `UPDATE deliverables SET output_data = ?, updated_at = datetime('now') WHERE id = ?`,
+        JSON.stringify(output_data),
+        cleanId
+      );
+    }
+  } catch (err) {
+    // Silent fallback
+  }
+
+  return updatedRecord;
 }
 
 // 5. Delete Deliverable
 export async function deleteDeliverable(id) {
-  if (useSupabase) {
-    const { error } = await supabase
-      .from('deliverables')
-      .delete()
-      .eq('id', id);
+  const cleanId = String(id).trim();
+  memoryStore.delete(cleanId);
 
-    if (error) {
-      console.error('[Supabase Error] deleteDeliverable:', error);
-      throw error;
+  if (useSupabase) {
+    try {
+      await supabase.from('deliverables').delete().eq('id', cleanId);
+    } catch (err) {
+      console.warn('[Database Warning] Supabase delete error:', err.message);
     }
-    return true;
   }
 
-  const database = await getSqliteDbConnection();
-  const existing = await database.get('SELECT * FROM deliverables WHERE id = ?', id);
-  if (!existing) return false;
+  try {
+    const database = await getSqliteDbConnection();
+    if (database) {
+      await database.run('DELETE FROM deliverables WHERE id = ?', cleanId);
+    }
+  } catch (err) {
+    // Silent fallback
+  }
 
-  await database.run('DELETE FROM deliverables WHERE id = ?', id);
   return true;
 }

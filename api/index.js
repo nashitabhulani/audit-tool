@@ -21,23 +21,13 @@ import { generateDeliverableJSON } from '../backend/llm.js';
 import { buildPPTX } from '../backend/pptx_generator.js';
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
-// Log requests & normalize URL path
-app.use((req, res, next) => {
-  if (!req.url.startsWith('/api')) {
-    req.url = '/api' + (req.url.startsWith('/') ? '' : '/') + req.url;
-  }
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
-
-// API Routes
+const router = express.Router();
 
 // 1. Get history list
-app.get('/api/deliverables', async (req, res) => {
+router.get('/deliverables', async (req, res) => {
   try {
     const list = await getAllDeliverables();
     res.json(list);
@@ -48,7 +38,7 @@ app.get('/api/deliverables', async (req, res) => {
 });
 
 // 2. Get single deliverable details
-app.get('/api/deliverables/:id', async (req, res) => {
+router.get('/deliverables/:id', async (req, res) => {
   try {
     const item = await getDeliverableById(req.params.id);
     if (!item) {
@@ -62,7 +52,7 @@ app.get('/api/deliverables/:id', async (req, res) => {
 });
 
 // 3. Generate new deliverable
-app.post('/api/deliverables', async (req, res) => {
+router.post('/deliverables', async (req, res) => {
   const { type, inputs } = req.body;
   
   if (!type || !['audit', 'pre-scoping'].includes(type)) {
@@ -102,7 +92,7 @@ app.post('/api/deliverables', async (req, res) => {
 });
 
 // 4. Update / Save inline edits
-app.put('/api/deliverables/:id', async (req, res) => {
+router.put('/deliverables/:id', async (req, res) => {
   const { output_data } = req.body;
   if (!output_data) {
     return res.status(400).json({ error: 'Missing output_data parameter.' });
@@ -121,7 +111,7 @@ app.put('/api/deliverables/:id', async (req, res) => {
 });
 
 // 5. Delete deliverable
-app.delete('/api/deliverables/:id', async (req, res) => {
+router.delete('/deliverables/:id', async (req, res) => {
   try {
     const success = await deleteDeliverable(req.params.id);
     if (!success) {
@@ -135,7 +125,7 @@ app.delete('/api/deliverables/:id', async (req, res) => {
 });
 
 // 6. Export to PPTX
-app.get('/api/deliverables/:id/export', async (req, res) => {
+router.get('/deliverables/:id/export', async (req, res) => {
   try {
     const deliverable = await getDeliverableById(req.params.id);
     if (!deliverable) {
@@ -162,5 +152,9 @@ app.get('/api/deliverables/:id/export', async (req, res) => {
     res.status(500).json({ error: 'Failed to generate PPTX download file.', details: error.message });
   }
 });
+
+// Mount router on BOTH /api and / so Express matches regardless of path rewrites
+app.use('/api', router);
+app.use('/', router);
 
 export default app;
