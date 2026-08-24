@@ -106,9 +106,44 @@ export default function AuditReport({ deliverableId, onBack }) {
     handleUpdate(updatedOutput);
   };
 
-  const exportToPPTX = () => {
-    // Navigate straight to download route
-    window.open(`/api/deliverables/${deliverableId}/export`, '_blank');
+  const exportToPPTX = async () => {
+    try {
+      // Get the deliverable data from state (already loaded)
+      const exportData = data;
+      if (!exportData || !exportData.output_data) {
+        alert('No report data available to export.');
+        return;
+      }
+
+      const res = await fetch(API_BASE + '/api/deliverables/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: exportData.type,
+          client_name: exportData.client_name,
+          output_data: exportData.output_data
+        })
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text();
+        throw new Error(errBody || 'Export failed');
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeName = (exportData.client_name || 'report').replace(/[^a-z0-9]/gi, '_');
+      a.download = `${safeName}_${exportData.type}_deck.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('PPTX export error:', err);
+      alert('Failed to export PPTX: ' + err.message);
+    }
   };
 
   if (loading) {

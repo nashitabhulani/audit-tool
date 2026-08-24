@@ -26,6 +26,31 @@ app.use(express.json());
 
 const router = express.Router();
 
+// Export to PPTX via POST (receives data in body, no DB lookup needed)
+router.post('/deliverables/export', async (req, res) => {
+  try {
+    const { type, client_name, output_data } = req.body;
+    if (!type || !output_data) {
+      return res.status(400).json({ error: 'Missing type or output_data for export.' });
+    }
+
+    console.log(`Building PPTX for: ${client_name || 'Unknown'} (${type})`);
+
+    const pptx = buildPPTX(type, output_data);
+    const buffer = await pptx.write('nodebuffer');
+
+    const safeClientName = (client_name || 'report').replace(/[^a-z0-9]/gi, '_');
+    const filename = `${safeClientName}_${type}_deck.pptx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('PPTX export failed:', error);
+    res.status(500).json({ error: 'Failed to generate PPTX.', details: error.message });
+  }
+});
+
 // 1. Get history list
 router.get('/deliverables', async (req, res) => {
   try {
