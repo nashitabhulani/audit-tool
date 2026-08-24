@@ -80,14 +80,14 @@ export async function getAllDeliverables() {
 // 2. Get Deliverable By ID
 export async function getDeliverableById(id) {
   if (useSupabase) {
+    const cleanId = String(id).trim();
     const { data, error } = await supabase
       .from('deliverables')
       .select('*')
-      .eq('id', id)
-      .single();
+      .eq('id', cleanId)
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
       console.error('[Supabase Error] getDeliverableById:', error);
       throw error;
     }
@@ -126,7 +126,7 @@ export async function createDeliverable({ id, client_name, type, input_data, out
       .from('deliverables')
       .insert([payload])
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('[Supabase Error] createDeliverable:', error);
