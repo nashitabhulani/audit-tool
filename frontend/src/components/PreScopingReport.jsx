@@ -27,10 +27,26 @@ export default function PreScopingReport({ deliverableId, onBack }) {
   const fetchReport = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/deliverables/${deliverableId}`);
+      const cached = sessionStorage.getItem('deliverable_' + deliverableId);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && (parsed.id === deliverableId || parsed.id)) {
+            setData(parsed);
+            setError(null);
+            setLoading(false);
+            return;
+          }
+        } catch (e) {}
+      }
+
+      const res = await fetch(API_BASE + `/api/deliverables/${deliverableId}`);
       if (!res.ok) throw new Error('Failed to load pre-scoping report.');
       const record = await res.json();
       setData(record);
+      try {
+        sessionStorage.setItem('deliverable_' + deliverableId, JSON.stringify(record));
+      } catch (e) {}
       setError(null);
     } catch (err) {
       console.error(err);

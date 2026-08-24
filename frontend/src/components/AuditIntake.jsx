@@ -88,6 +88,11 @@ export default function AuditIntake({ onBack, onGenerateComplete }) {
       if (!res.ok) {
         throw new Error(data.details || data.error || 'Failed to generate deliverable.');
       }
+      if (data && data.id) {
+        try {
+          sessionStorage.setItem('deliverable_' + data.id, JSON.stringify(data));
+        } catch (e) {}
+      }
       onGenerateComplete(data.id);
     } catch (err) {
       console.error(err);
