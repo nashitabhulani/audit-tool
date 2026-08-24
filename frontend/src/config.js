@@ -1,2 +1,3 @@
-export const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+// API calls go to same origin (Vercel serves both frontend + /api serverless functions)
+export const API_BASE = '';
 
