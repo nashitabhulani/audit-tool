@@ -116,8 +116,8 @@ export async function createDeliverable({ id, client_name, type, input_data, out
       id,
       client_name,
       type,
-      input_data,
-      output_data,
+      input_data: typeof input_data === 'object' ? JSON.stringify(input_data) : input_data,
+      output_data: typeof output_data === 'object' ? JSON.stringify(output_data) : output_data,
       created_at: now,
       updated_at: now
     };
@@ -134,9 +134,13 @@ export async function createDeliverable({ id, client_name, type, input_data, out
     }
 
     return {
-      ...data,
-      input_data: parseJsonIfNeeded(data.input_data),
-      output_data: parseJsonIfNeeded(data.output_data)
+      id,
+      client_name,
+      type,
+      input_data: parseJsonIfNeeded(data?.input_data || input_data),
+      output_data: parseJsonIfNeeded(data?.output_data || output_data),
+      created_at: data?.created_at || now,
+      updated_at: data?.updated_at || now
     };
   }
 
@@ -157,15 +161,17 @@ export async function createDeliverable({ id, client_name, type, input_data, out
 export async function updateDeliverable(id, { output_data }) {
   if (useSupabase) {
     const now = new Date().toISOString();
+    const payload = {
+      output_data: typeof output_data === 'object' ? JSON.stringify(output_data) : output_data,
+      updated_at: now
+    };
+
     const { data, error } = await supabase
       .from('deliverables')
-      .update({
-        output_data,
-        updated_at: now
-      })
+      .update(payload)
       .eq('id', id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('[Supabase Error] updateDeliverable:', error);
