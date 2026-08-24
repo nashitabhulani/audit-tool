@@ -1,5 +1,3 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
@@ -24,11 +22,19 @@ if (useSupabase) {
 const memoryStore = new Map();
 
 let sqliteDb = null;
+let sqliteAvailable = null; // null = not checked yet
 
 async function getSqliteDbConnection() {
   if (sqliteDb) return sqliteDb;
+  if (sqliteAvailable === false) return null;
 
   try {
+    // Dynamic import to avoid crash on Vercel Serverless (sqlite3 is a native C++ module)
+    const sqlite3Module = await import('sqlite3');
+    const sqliteModule = await import('sqlite');
+    const sqlite3 = sqlite3Module.default || sqlite3Module;
+    const { open } = sqliteModule;
+
     sqliteDb = await open({
       filename: dbPath,
       driver: sqlite3.Database
@@ -45,8 +51,11 @@ async function getSqliteDbConnection() {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    sqliteAvailable = true;
   } catch (err) {
-    console.warn('[SQLite] SQLite initialization skipped in serverless environment.');
+    console.warn('[SQLite] SQLite initialization skipped (serverless environment or native module unavailable).');
+    sqliteAvailable = false;
+    return null;
   }
 
   return sqliteDb;
