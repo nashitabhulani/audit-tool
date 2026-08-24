@@ -66,7 +66,7 @@ async function callLLM(userPrompt, history = []) {
 
   if (openrouterKey) {
     // OpenRouter flow
-    const model = process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash';
+    const model = process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash:free';
     const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
     
     // Construct messages array including history
@@ -88,7 +88,7 @@ async function callLLM(userPrompt, history = []) {
         model: model,
         messages: messages,
         response_format: { type: 'json_object' },
-        max_tokens: 8000,
+        max_tokens: 4000,
         temperature: 0.2
       })
     });
