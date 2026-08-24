@@ -65,13 +65,13 @@ async function callLLM(userPrompt, history = []) {
   }
 
   if (openrouterKey) {
-    // OpenRouter flow with automatic free model fallback cascade
+    // OpenRouter flow — EXCLUSIVELY 100% FREE models (:free)
     const candidateModels = [
-      process.env.OPENROUTER_MODEL,
       'meta-llama/llama-3.3-70b-instruct:free',
       'google/gemini-2.0-flash-exp:free',
-      'qwen/qwen-2.5-coder-32b-instruct:free'
-    ].filter(Boolean);
+      'qwen/qwen-2.5-coder-32b-instruct:free',
+      'deepseek/deepseek-r1:free'
+    ];
 
     const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
     
