@@ -65,8 +65,14 @@ async function callLLM(userPrompt, history = []) {
   }
 
   if (openrouterKey) {
-    // OpenRouter flow
-    const model = process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash:free';
+    // OpenRouter flow with automatic free model fallback cascade
+    const candidateModels = [
+      process.env.OPENROUTER_MODEL,
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'google/gemini-2.0-flash-exp:free',
+      'qwen/qwen-2.5-coder-32b-instruct:free'
+    ].filter(Boolean);
+
     const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
     
     // Construct messages array including history
@@ -76,33 +82,49 @@ async function callLLM(userPrompt, history = []) {
       { role: 'user', content: userPrompt }
     ];
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openrouterKey}`,
-        'HTTP-Referer': 'http://localhost:3001',
-        'X-Title': 'Client Deliverable Toolkit'
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        response_format: { type: 'json_object' },
-        max_tokens: 4000,
-        temperature: 0.2
-      })
-    });
+    let lastError = null;
+    for (const modelCandidate of candidateModels) {
+      try {
+        console.log(`[LLM] Trying OpenRouter model: ${modelCandidate}`);
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openrouterKey}`,
+            'HTTP-Referer': 'https://audit-tool-pi.vercel.app',
+            'X-Title': 'Client Deliverable Toolkit'
+          },
+          body: JSON.stringify({
+            model: modelCandidate,
+            messages: messages,
+            response_format: { type: 'json_object' },
+            max_tokens: 3500,
+            temperature: 0.2
+          })
+        });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`OpenRouter API error (HTTP ${response.status}): ${errText}`);
+        if (!response.ok) {
+          const errText = await response.text();
+          console.warn(`[LLM Warning] Model ${modelCandidate} failed (HTTP ${response.status}): ${errText}`);
+          lastError = new Error(`OpenRouter API error (HTTP ${response.status}): ${errText}`);
+          continue;
+        }
+
+        const resJson = await response.json();
+        if (!resJson.choices || resJson.choices.length === 0) {
+          console.warn(`[LLM Warning] Model ${modelCandidate} returned empty choices`);
+          lastError = new Error('OpenRouter returned an empty choices list');
+          continue;
+        }
+
+        return resJson.choices[0].message.content;
+      } catch (err) {
+        console.warn(`[LLM Warning] Model ${modelCandidate} error: ${err.message}`);
+        lastError = err;
+      }
     }
 
-    const resJson = await response.json();
-    if (!resJson.choices || resJson.choices.length === 0) {
-      throw new Error('OpenRouter returned an empty choices list');
-    }
-    return resJson.choices[0].message.content;
+    throw lastError || new Error('All OpenRouter models in cascade failed');
   } else {
     // Anthropic flow
     const anthropic = new Anthropic({ apiKey: anthropicKey });
