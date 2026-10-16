@@ -131,6 +131,30 @@ app.delete('/api/deliverables/:id', async (req, res) => {
   }
 });
 
+// Export the report data sent by the browser, without relying on serverless persistence.
+app.post('/api/deliverables/export', async (req, res) => {
+  try {
+    const { type, client_name, output_data } = req.body;
+    if (!type || !output_data) {
+      return res.status(400).json({ error: 'Missing type or output_data for export.' });
+    }
+
+    console.log(`Building PPTX for: ${client_name || 'Unknown'} (${type})`);
+
+    const pptx = buildPPTX(type, output_data);
+    const buffer = await pptx.write('nodebuffer');
+    const safeClientName = (client_name || 'report').replace(/[^a-z0-9]/gi, '_');
+    const filename = `${safeClientName}_${type}_deck.pptx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('PPTX export failed:', error);
+    res.status(500).json({ error: 'Failed to generate PPTX.', details: error.message });
+  }
+});
+
 // 6. Export to PPTX
 app.get('/api/deliverables/:id/export', async (req, res) => {
   try {
