@@ -35,7 +35,7 @@ export default function Dashboard({ onCreateAudit, onCreatePreScoping, onViewDel
     if (!window.confirm('Are you sure you want to permanently delete this deliverable?')) return;
 
     try {
-      const res = await fetch(`/api/deliverables/${id}`, { method: 'DELETE' });
+      const res = await fetch(API_BASE + `/api/deliverables/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete.');
       setDeliverables(prev => prev.filter(item => item.id !== id));
     } catch (err) {

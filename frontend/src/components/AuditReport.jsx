@@ -48,7 +48,7 @@ export default function AuditReport({ deliverableId, onBack }) {
   const handleUpdate = async (updatedOutput) => {
     try {
       setSaving(true);
-      const res = await fetch(`/api/deliverables/${deliverableId}`, {
+      const res = await fetch(API_BASE + `/api/deliverables/${deliverableId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ output_data: updatedOutput })
