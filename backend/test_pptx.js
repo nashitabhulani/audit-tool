@@ -19,8 +19,20 @@ async function run() {
         section_name: 'Performance',
         score: 6.5,
         findings: [
-          { issue: 'Large Hero Image', severity: 'high', impact: 'Slows down LCP', recommendation: 'Compress image', effort_estimate: 'low' },
-          { issue: 'Render Blocking CSS', severity: 'medium', impact: 'Delay paint time', recommendation: 'Defer CSS', effort_estimate: 'medium' }
+          {
+            issue: 'Initial page load times for key landing pages appear suboptimal, potentially due to unoptimized image assets and excessive JavaScript execution',
+            severity: 'high',
+            impact: 'Slow loading can increase user abandonment and negatively affect search rankings, limiting organic reach and engagement.',
+            recommendation: 'Implement lazy loading for images and videos, compress all media assets, defer non-critical JavaScript, and leverage browser caching. Consider a content delivery network for global distribution.',
+            effort_estimate: 'low'
+          },
+          {
+            issue: 'Critical page content depends on client-side JavaScript and may not be available to search crawlers',
+            severity: 'medium',
+            impact: 'Delayed rendering can make important content harder for search engines and users to discover.',
+            recommendation: 'Evaluate server-side rendering or static generation for priority pages and verify rendered content with search engine inspection tools.',
+            effort_estimate: 'medium'
+          }
         ]
       },
       {

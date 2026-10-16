@@ -1,37 +1,31 @@
 import pptxgen from 'pptxgenjs';
 
 // =============================================================================
-// ALKEM ASCEND THEME — Visual Style Configuration
+// Reference deck theme — editable DigiChefs-inspired styling
 // =============================================================================
 
 const COLORS = {
-  // Backgrounds
   white: 'FFFFFF',
-  lightBg: 'F9FAFB',        // Gray 50 — card backgrounds
-  darkNavy: '1A1A2E',       // Dark navy — title/section divider slides
-  darkCard: '16213E',       // Slightly lighter navy for cards on dark slides
-
-  // Text
-  darkText: '2D2D2D',       // Primary text on light backgrounds
-  mutedText: '6B7280',      // Secondary/muted text
-  lightText: 'FFFFFF',      // Text on dark backgrounds
-  lightMuted: 'B0B8C8',     // Muted text on dark backgrounds
-
-  // Accent Colors
-  orange: 'F97316',         // Primary accent — Vibrant Orange
-  deepOrange: 'EA580C',     // Deeper orange for gradient stops
-  red: 'DC2626',            // Secondary accent / high severity
-  amber: 'F59E0B',          // Medium severity
-  emerald: '10B981',        // Low severity / success
-
-  // Borders
-  border: 'E5E7EB',         // Light grey border for cards
-  darkBorder: '2D3A5E',     // Border on dark backgrounds
+  lightBg: 'F3F3F3',
+  darkNavy: '222222',
+  darkCard: '333333',
+  darkText: '222222',
+  mutedText: '595959',
+  lightText: 'FFFFFF',
+  lightMuted: 'D9D9D9',
+  orange: 'F35A00',
+  deepOrange: 'C94200',
+  gold: 'F1C132',
+  red: 'DC2626',
+  amber: 'F1C132',
+  emerald: '10B981',
+  border: 'D9D9D9',
+  darkBorder: '595959',
 };
 
 const FONTS = {
-  heading: 'Calibri',
-  body: 'Calibri',
+  heading: 'Arial',
+  body: 'Arial',
 };
 
 // =============================================================================
@@ -59,17 +53,25 @@ function getSeverityColor(sev) {
 
 /** Get severity label color for light backgrounds */
 function getSeverityTextColor(sev) {
-  return getSeverityColor(sev);
+  return String(sev).toLowerCase() === 'medium' ? COLORS.darkText : COLORS.lightText;
 }
 
 /** Apply the standard light-background content slide layout */
 function applyLightSlideLayout(slide, title, clientName, shapes) {
   slide.background = { fill: COLORS.white };
+  const normalizedClientName = clientName.replace(/\s+/g, ' ').trim().toUpperCase();
+  const clientLabel = normalizedClientName.length > 30
+    ? `${normalizedClientName.slice(0, 27)}...`
+    : normalizedClientName;
 
-  // Top orange accent bar (full width)
+  // Orange and gold rules echo the reference deck's section styling.
   slide.addShape(shapes.RECTANGLE, {
-    x: 0.0, y: 0.0, w: 10.0, h: 0.06,
+    x: 0.0, y: 0.0, w: 10.0, h: 0.07,
     fill: { color: COLORS.orange }
+  });
+  slide.addShape(shapes.RECTANGLE, {
+    x: 0.0, y: 0.07, w: 10.0, h: 0.025,
+    fill: { color: COLORS.gold }
   });
 
   // Slide title
@@ -82,13 +84,15 @@ function applyLightSlideLayout(slide, title, clientName, shapes) {
   });
 
   // Client tag (top right)
-  slide.addText(clientName.toUpperCase(), {
+  slide.addText(clientLabel, {
     x: 7.5, y: 0.2, w: 2.0, h: 0.5,
-    fontSize: 9, bold: true,
+    fontSize: Math.max(6, Math.min(9, 185 / clientLabel.length)), bold: true,
     color: COLORS.orange,
     align: 'right',
     fontFace: FONTS.heading,
     valign: 'middle',
+    margin: 0,
+    wrap: false,
   });
 
   // Subtle divider line under header
@@ -102,16 +106,14 @@ function applyLightSlideLayout(slide, title, clientName, shapes) {
 function applyDarkSlideLayout(slide, shapes) {
   slide.background = { fill: COLORS.darkNavy };
 
-  // Decorative orange arc — right side
+  // Editable brand-color bars on the right edge.
   slide.addShape(shapes.RECTANGLE, {
-    x: 8.5, y: 0.0, w: 1.5, h: 5.625,
+    x: 9.35, y: 0.0, w: 0.65, h: 5.625,
     fill: { color: COLORS.orange },
   });
-
-  // Secondary red strip
   slide.addShape(shapes.RECTANGLE, {
-    x: 9.2, y: 0.0, w: 0.8, h: 5.625,
-    fill: { color: COLORS.deepOrange },
+    x: 9.1, y: 0.0, w: 0.25, h: 5.625,
+    fill: { color: COLORS.gold },
   });
 }
 
@@ -122,6 +124,10 @@ function applyDarkSlideLayout(slide, shapes) {
 export function buildPPTX(type, data) {
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_16x9'; // 10.0 x 5.625 inches
+  pptx.theme = {
+    headFontFace: FONTS.heading,
+    bodyFontFace: FONTS.body,
+  };
   const shapes = pptx.shapes || pptx.ShapeType;
 
   const clientName = data.client_name || 'Client';
@@ -155,7 +161,7 @@ function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
   });
   titleSlide.addShape(shapes.RECTANGLE, {
     x: 0.12, y: 0.0, w: 0.06, h: 5.625,
-    fill: { color: COLORS.deepOrange }
+    fill: { color: COLORS.gold }
   });
 
   // Tagline
@@ -223,7 +229,7 @@ function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
   const scoreColor = overallScore >= 8 ? COLORS.emerald : (overallScore >= 5 ? COLORS.amber : COLORS.red);
 
   summarySlide.addText(String(overallScore), {
-    x: 0.7, y: 1.5, w: 2.8, h: 1.6,
+    x: 0.7, y: 1.6, w: 2.8, h: 1.4,
     fontSize: 80, bold: true,
     color: scoreColor,
     align: 'center',
@@ -390,7 +396,7 @@ function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
           secSlide.addText(sevText, {
             x: 8.0, y: yPos + 0.02, w: 0.85, h: 0.24,
             fontSize: 6.5, bold: true,
-            color: COLORS.lightText,
+            color: getSeverityTextColor(f.severity),
             align: 'center',
             fontFace: FONTS.heading,
             valign: 'middle',
@@ -440,7 +446,7 @@ function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
   const ap = data.action_plan || {};
   const roadmap = [
     { title: 'QUICK WINS', subtitle: 'Short-Term', items: ap.quick_wins || [], x: 0.5, accentColor: COLORS.orange },
-    { title: 'MEDIUM-TERM', subtitle: 'Routine', items: ap.medium_term || [], x: 3.6, accentColor: COLORS.deepOrange },
+    { title: 'MEDIUM-TERM', subtitle: 'Routine', items: ap.medium_term || [], x: 3.6, accentColor: COLORS.gold },
     { title: 'LONG-TERM', subtitle: 'Evolution', items: ap.long_term || [], x: 6.7, accentColor: COLORS.red },
   ];
 
@@ -455,7 +461,7 @@ function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
     actionPlanSlide.addText(`${col.title}\n${col.subtitle}`, {
       x: col.x, y: 1.0, w: 2.8, h: 0.5,
       fontSize: 10, bold: true,
-      color: COLORS.lightText,
+      color: col.accentColor === COLORS.gold ? COLORS.darkText : COLORS.lightText,
       align: 'center',
       fontFace: FONTS.heading,
       valign: 'middle',
@@ -473,7 +479,7 @@ function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
     if (col.items.length > 0) {
       const itemRuns = [];
       col.items.forEach((it, i) => {
-        itemRuns.push({ text: '●  ', options: { fontSize: 9, color: col.accentColor, fontFace: FONTS.body } });
+        itemRuns.push({ text: '●  ', options: { fontSize: 9, color: col.accentColor === COLORS.gold ? COLORS.darkText : col.accentColor, fontFace: FONTS.body } });
         itemRuns.push({
           text: stripMarkdown(it) + (i < col.items.length - 1 ? '\n\n' : ''),
           options: { fontSize: 9, color: COLORS.darkText, fontFace: FONTS.body }
@@ -543,7 +549,7 @@ function buildPreScopingDeck(pptx, shapes, data, clientName, generatedAt) {
   });
   titleSlide.addShape(shapes.RECTANGLE, {
     x: 0.12, y: 0.0, w: 0.06, h: 5.625,
-    fill: { color: COLORS.deepOrange }
+    fill: { color: COLORS.gold }
   });
 
   titleSlide.addText('INTEGRITY MATTERS // DIGITAL DISCOVERY', {
@@ -877,7 +883,7 @@ function buildPreScopingDeck(pptx, shapes, data, clientName, generatedAt) {
 
   formSlide.addShape(shapes.RECTANGLE, {
     x: 5.0, y: 1.0, w: 4.5, h: 0.06,
-    fill: { color: COLORS.deepOrange },
+    fill: { color: COLORS.gold },
   });
 
   formSlide.addText('CLIENT CONVERSION JOURNEYS', {
@@ -998,7 +1004,6 @@ function buildPreScopingDeck(pptx, shapes, data, clientName, generatedAt) {
       x: 0.5, y: 1.0, w: 9.0,
       colW: [2.0, 3.5, 1.8, 1.7],
       border: { type: 'solid', color: COLORS.border, pt: 0.5 },
-      rowH: [0.4, ...Array(tableData.length - 1).fill(0.5)],
     });
   }
 
