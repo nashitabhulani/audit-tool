@@ -285,7 +285,7 @@ function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
   const sections = data.sections || [];
   sections.forEach((sec) => {
     const findings = sec.findings || [];
-    const MAX_FINDINGS_PER_SLIDE = 3;
+    const MAX_FINDINGS_PER_SLIDE = 2;
     const totalSlides = Math.max(1, Math.ceil(findings.length / MAX_FINDINGS_PER_SLIDE));
 
     for (let slideIdx = 0; slideIdx < totalSlides; slideIdx++) {
@@ -355,7 +355,7 @@ function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
           fontSize: 11, color: COLORS.mutedText, fontFace: FONTS.body,
         });
       } else {
-        const findingHeight = Math.min(1.3, 3.5 / visibleFindings.length);
+        const findingHeight = 3.5 / visibleFindings.length;
 
         visibleFindings.forEach((f, idx) => {
           const yPos = 1.5 + (idx * findingHeight);
@@ -370,11 +370,12 @@ function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
           // Finding title (clean, no brackets)
           const cleanIssue = stripMarkdown(f.issue || '');
           secSlide.addText(cleanIssue, {
-            x: 3.55, y: yPos, w: 4.8, h: 0.3,
-            fontSize: 10, bold: true,
+            x: 3.55, y: yPos, w: 4.25, h: 0.48,
+            fontSize: 9.5, bold: true,
             color: COLORS.darkText,
             fontFace: FONTS.heading,
             valign: 'top',
+            margin: 0,
           });
 
           // Severity & Effort badges
@@ -382,31 +383,33 @@ function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
           const effText = String(f.effort_estimate || 'N/A').toUpperCase();
 
           secSlide.addShape(shapes.ROUNDED_RECTANGLE, {
-            x: 8.5, y: yPos + 0.02, w: 0.7, h: 0.22,
+            x: 8.0, y: yPos + 0.02, w: 0.85, h: 0.24,
             fill: { color: sevColor },
             rectRadius: 0.05,
           });
           secSlide.addText(sevText, {
-            x: 8.5, y: yPos + 0.02, w: 0.7, h: 0.22,
-            fontSize: 7, bold: true,
+            x: 8.0, y: yPos + 0.02, w: 0.85, h: 0.24,
+            fontSize: 6.5, bold: true,
             color: COLORS.lightText,
             align: 'center',
             fontFace: FONTS.heading,
             valign: 'middle',
+            margin: 0,
           });
 
           secSlide.addShape(shapes.ROUNDED_RECTANGLE, {
-            x: 9.25, y: yPos + 0.02, w: 0.55, h: 0.22,
+            x: 8.95, y: yPos + 0.02, w: 0.85, h: 0.24,
             fill: { color: COLORS.mutedText },
             rectRadius: 0.05,
           });
           secSlide.addText(effText, {
-            x: 9.25, y: yPos + 0.02, w: 0.55, h: 0.22,
-            fontSize: 7, bold: true,
+            x: 8.95, y: yPos + 0.02, w: 0.85, h: 0.24,
+            fontSize: 6.5, bold: true,
             color: COLORS.lightText,
             align: 'center',
             fontFace: FONTS.heading,
             valign: 'middle',
+            margin: 0,
           });
 
           // Impact + Recommendation body
@@ -420,10 +423,10 @@ function buildAuditDeck(pptx, shapes, data, clientName, generatedAt) {
           ];
 
           secSlide.addText(bodyRuns, {
-            x: 3.55, y: yPos + 0.3, w: 6.25, h: findingHeight - 0.45,
+            x: 3.55, y: yPos + 0.55, w: 6.25, h: findingHeight - 0.62,
             valign: 'top',
-            lineSpacingMultiple: 1.15,
-            shrinkText: true,
+            lineSpacingMultiple: 1.05,
+            margin: 0,
           });
         });
       }
@@ -678,7 +681,6 @@ function buildPreScopingDeck(pptx, shapes, data, clientName, generatedAt) {
       x: 0.5, y: 1.0, w: 9.0,
       colW: [2.0, 3.5, 3.5],
       border: { type: 'solid', color: COLORS.border, pt: 0.5 },
-      rowH: [0.4, ...Array(tableData.length - 1).fill(0.5)],
     });
   }
 
@@ -810,7 +812,6 @@ function buildPreScopingDeck(pptx, shapes, data, clientName, generatedAt) {
       x: 0.5, y: 1.0, w: 9.0,
       colW: [1.8, 2.2, 3.8, 1.2],
       border: { type: 'solid', color: COLORS.border, pt: 0.5 },
-      rowH: [0.4, ...Array(tableData.length - 1).fill(0.5)],
     });
   }
 
